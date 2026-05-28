@@ -99,10 +99,8 @@ It should not include:
 Only publish from an intentional npm account:
 
 ```bash
-npm version patch
-npm publish
-npm run check:published
-npm run release:github
+npm adduser --registry=https://registry.npmjs.org/
+npm run release:npm
 ```
 
 The package sets `publishConfig.access` to `public`, so the publish command does

@@ -60,6 +60,7 @@
     "demo:sync": "npm run build && node dist/scripts/sync-demo.js",
     "prepack": "npm run build && npm run check:stack && npm run check:package && npm run check:surface && npm run check:walkthrough && npm run check:install && npm run check:launch && npm run check:release",
     "release:github": "node dist/scripts/github-release.js",
+    "release:npm": "node dist/scripts/npm-release.js",
     "smoke": "npm run build && node dist/scripts/smoke.js",
     "test": "npm run build && npm run check:stack && npm run check:package && npm run check:surface && npm run check:walkthrough && node --test \"dist/tests/**/*.test.js\""
   },

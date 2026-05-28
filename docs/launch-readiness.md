@@ -79,12 +79,13 @@ npm pack --dry-run
 Only publish from the intended npm account:
 
 ```bash
-npm whoami
-npm publish
+npm adduser --registry=https://registry.npmjs.org/
+npm run release:npm
 ```
 
-After publishing, verify the installed package from the registry in a fresh
-temporary project:
+`release:npm` publishes to npmjs, verifies the installed package from the
+registry in a fresh temporary project, then creates the `v0.1.0` GitHub Release.
+You can rerun the final checks separately if needed:
 
 ```bash
 npm run check:published

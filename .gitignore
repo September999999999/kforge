@@ -1,0 +1,11 @@
+dist/
+node_modules/
+coverage/
+.DS_Store
+.serena/
+npm-debug.log*
+*.tgz
+.env
+.env.*
+!.env.example
+*.log

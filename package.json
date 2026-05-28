@@ -1,0 +1,82 @@
+{
+  "name": "kforge",
+  "version": "0.1.0",
+  "description": "A local-first Markdown repo protocol and CLI for LLM-maintained knowledge bases.",
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "sideEffects": false,
+  "license": "MIT",
+  "packageManager": "npm@10",
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "kforge": "./dist/src/cli.js",
+    "kforge-mcp": "./dist/src/mcp.js"
+  },
+  "files": [
+    "dist/src",
+    "dist/scripts",
+    "docs",
+    "examples/demo-repo",
+    ".github/ISSUE_TEMPLATE",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    ".github/workflows/ci.yml",
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "README.md",
+    "SECURITY.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check:install": "node dist/scripts/check-install.js",
+    "check:launch": "node dist/scripts/check-launch.js",
+    "check:package": "node dist/scripts/check-package.js",
+    "check:release": "node dist/scripts/check-release.js",
+    "check:stack": "node dist/scripts/check-stack.js",
+    "check:surface": "node dist/scripts/check-surface.js",
+    "check:walkthrough": "node dist/scripts/check-walkthrough.js",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "demo:sync": "npm run build && node dist/scripts/sync-demo.js",
+    "prepack": "npm run build && npm run check:stack && npm run check:package && npm run check:surface && npm run check:walkthrough && npm run check:install && npm run check:launch && npm run check:release",
+    "smoke": "npm run build && node dist/scripts/smoke.js",
+    "test": "npm run build && npm run check:stack && npm run check:package && npm run check:surface && npm run check:walkthrough && node --test \"dist/tests/**/*.test.js\""
+  },
+  "keywords": [
+    "llm",
+    "knowledge-base",
+    "markdown",
+    "obsidian",
+    "agent",
+    "mcp",
+    "local-first",
+    "repo",
+    "cli",
+    "provenance",
+    "pkm",
+    "personal-knowledge-management",
+    "knowledge-graph",
+    "model-context-protocol"
+  ],
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
+  }
+}

@@ -1,0 +1,13 @@
+protocol: kforge
+version: 0.1
+title: Untitled Knowledge Repo
+language: en
+directories:
+  raw: raw
+  wiki: wiki
+  claims: claims
+  indexes: indexes
+  outputs: outputs
+  reviews: reviews
+  tasks: tasks
+  runs: runs

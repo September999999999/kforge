@@ -17,6 +17,14 @@
   "publishConfig": {
     "access": "public"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/September999999999/kforge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/September999999999/kforge/issues"
+  },
+  "homepage": "https://github.com/September999999999/kforge#readme",
   "bin": {
     "kforge": "./dist/src/cli.js",
     "kforge-mcp": "./dist/src/mcp.js"

@@ -13,6 +13,7 @@ import {
   applyReview,
   reviewQueue,
   taskList,
+  updateReviewContent,
   updateReviewStatus,
   type CommandResult,
   type ReviewStatus,
@@ -100,6 +101,19 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
         return;
       }
       const result = updateReviewStatus(repoPath, { file, status, note: optionalString(body.note), json: true });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/review-content") {
+      const body = await readJsonBody(request);
+      const file = optionalString(body.file);
+      const content = optionalString(body.content);
+      if (!file || !content) {
+        sendJson(response, 400, { ok: false, error: "review file and proposed content are required" });
+        return;
+      }
+      const result = updateReviewContent(repoPath, { file, content, json: true });
       sendJson(response, result.ok ? 200 : 400, commandResponse(result));
       return;
     }
@@ -552,6 +566,17 @@ function webDashboardHtml(): string {
       min-height: 74px;
       resize: vertical;
     }
+    .content-editor {
+      margin: 10px 0 12px;
+      display: grid;
+      gap: 8px;
+    }
+    .content-editor textarea {
+      min-height: 180px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.5;
+    }
     .stack { display: grid; gap: 14px; }
     .toast {
       min-height: 20px;
@@ -769,6 +794,7 @@ function webDashboardHtml(): string {
         $("filePreviewBody").innerHTML =
           '<div class="viewer-meta"><code>' + h(payload.file) + '</code>' + (payload.truncated ? '<span class="status warn">truncated</span>' : '') + '</div>' +
           reviewActions(payload.file) +
+          reviewContentEditor(payload.file, payload.content) +
           '<div class="viewer-grid"><pre>' + h(payload.inspect) + '</pre><pre>' + h(payload.content) + '</pre></div>' +
           '<div class="preview-output" id="applyPreview"></div>';
         bindReviewActions(payload.file);
@@ -791,7 +817,28 @@ function webDashboardHtml(): string {
         '</div>';
     }
 
+    function reviewContentEditor(file, content) {
+      if (!String(file || "").startsWith("reviews/")) return "";
+      return '<form class="content-editor" id="reviewContentForm">' +
+        '<label>Proposed Content<textarea name="content">' + h(proposedContentFromReview(content || "")) + '</textarea></label>' +
+        '<button class="button small" type="submit">Save Proposed Content</button>' +
+        '</form>';
+    }
+
+    function proposedContentFromReview(content) {
+      const match = String(content || "").match(/^##\\s+Proposed Content\\s*\\n([\\s\\S]*?)(?=\\n##\\s+|$)/m);
+      if (!match) return "";
+      const section = match[1].trim();
+      const fence = String.fromCharCode(96).repeat(3);
+      const fenced = section.match(new RegExp("^" + fence + "(?:markdown|md)?\\\\s*\\\\n([\\\\s\\\\S]*?)\\\\n" + fence + "\\\\s*$", "i"));
+      return fenced ? fenced[1].trim() : "";
+    }
+
     function bindReviewActions(file) {
+      const form = $("reviewContentForm");
+      if (form) {
+        form.addEventListener("submit", (event) => saveReviewContent(event, file));
+      }
       for (const button of document.querySelectorAll("[data-review-status]")) {
         button.addEventListener("click", () => updateReview(file, button.getAttribute("data-review-status") || ""));
       }
@@ -811,6 +858,26 @@ function webDashboardHtml(): string {
         await load();
         await openFile(file);
         toast("Review status: " + (result.payload?.previousStatus || "?") + " -> " + (result.payload?.status || status));
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function saveReviewContent(event, file) {
+      event.preventDefault();
+      if (!file) return;
+      const form = new FormData(event.currentTarget);
+      setBusy(true);
+      try {
+        await api("/api/review-content", {
+          method: "POST",
+          body: JSON.stringify({ file, content: String(form.get("content") || "") }),
+        });
+        await load();
+        await openFile(file);
+        toast("Proposed Content saved");
       } catch (error) {
         toast(error.message || String(error));
       } finally {

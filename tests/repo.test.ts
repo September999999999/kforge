@@ -339,6 +339,13 @@ test("web dashboard serves repo state and safe actions", async () => {
         inspect?: string;
         content?: string;
       };
+      const contentUpdate = (await fetchJson(`${handle.url}/api/review-content`, {
+        method: "POST",
+        body: JSON.stringify({
+          file: reviewFile,
+          content: "---\ntitle: Web Review\nsources:\n  - raw/source.md\n---\n# Web Review\n\nUpdated from the web workbench.\n",
+        }),
+      })) as { ok?: boolean; payload?: { review?: string; source?: string } };
       const accept = (await fetchJson(`${handle.url}/api/review-status`, {
         method: "POST",
         body: JSON.stringify({
@@ -364,6 +371,11 @@ test("web dashboard serves repo state and safe actions", async () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ file: reviewFile, status: "applied" }),
       });
+      const missingContent = await fetch(`${handle.url}/api/review-content`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ file: reviewFile, content: "" }),
+      });
       const refresh = (await fetchJson(`${handle.url}/api/refresh`, { method: "POST" })) as { ok?: boolean };
       const launch = (await fetchJson(`${handle.url}/api/agent-launch`, {
         method: "POST",
@@ -384,6 +396,9 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(filePreview.file, reviewFile);
       assert.match(filePreview.inspect ?? "", /# File Inspect/);
       assert.match(filePreview.content ?? "", /# Review: Web Review/);
+      assert.equal(contentUpdate.ok, true);
+      assert.equal(contentUpdate.payload?.review, reviewFile);
+      assert.equal(contentUpdate.payload?.source, "inline content");
       assert.equal(accept.ok, true);
       assert.equal(accept.payload?.previousStatus, "proposed");
       assert.equal(accept.payload?.status, "accepted");
@@ -391,13 +406,15 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(dryRun.ok, true);
       assert.equal(dryRun.payload?.dryRun, true);
       assert.equal(dryRun.payload?.target, "wiki/Web Review.md");
-      assert.match(dryRun.payload?.content ?? "", /Compiled from the web dashboard/);
+      assert.match(dryRun.payload?.content ?? "", /Updated from the web workbench/);
       assert.equal(reject.ok, true);
       assert.equal(reject.payload?.status, "rejected");
       assert.equal(reopen.ok, true);
       assert.equal(reopen.payload?.status, "proposed");
       assert.equal(invalidStatus.status, 400);
       assert.match(await invalidStatus.text(), /review file and status are required/);
+      assert.equal(missingContent.status, 400);
+      assert.match(await missingContent.text(), /review file and proposed content are required/);
       assert.equal(refresh.ok, true);
       assert.equal(launch.ok, true);
       assert.equal(launch.payload?.items?.length, 1);

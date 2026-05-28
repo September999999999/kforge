@@ -465,8 +465,9 @@ kforge web ~/research/my-topic
 
 The web dashboard binds to `127.0.0.1` by default. It shows repo health, review
 queue, task queue, runs, active agents, safe review file previews, and low-risk
-workflow actions such as accepting or rejecting reviews, previewing review apply
-as a dry run, refresh, bootstrap, and writing an agent launcher.
+workflow actions such as saving Proposed Content, accepting or rejecting reviews,
+previewing review apply as a dry run, refresh, bootstrap, and writing an agent
+launcher.
 
 Search the repo:
 

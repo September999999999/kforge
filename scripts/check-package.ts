@@ -46,6 +46,7 @@ const requiredScripts = [
   "check:install",
   "check:launch",
   "check:package",
+  "check:published",
   "check:release",
   "check:stack",
   "check:surface",

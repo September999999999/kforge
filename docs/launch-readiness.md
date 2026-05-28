@@ -84,4 +84,8 @@ npm publish
 ```
 
 After publishing, verify the installed package from the registry in a fresh
-temporary project.
+temporary project:
+
+```bash
+npm run check:published
+```

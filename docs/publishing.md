@@ -101,6 +101,7 @@ Only publish from an intentional npm account:
 ```bash
 npm version patch
 npm publish
+npm run check:published
 ```
 
 The package sets `publishConfig.access` to `public`, so the publish command does

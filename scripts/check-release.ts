@@ -54,6 +54,7 @@ const requiredPackFiles = [
   "dist/scripts/check-install.js",
   "dist/scripts/check-launch.js",
   "dist/scripts/check-package.js",
+  "dist/scripts/check-published.js",
   "dist/scripts/check-release.js",
   "dist/scripts/check-stack.js",
   "dist/scripts/check-surface.js",
@@ -123,6 +124,7 @@ async function main(): Promise<void> {
   expect(packageJson.scripts?.["check:install"] === "node dist/scripts/check-install.js", "scripts.check:install must run dist/scripts/check-install.js", issues);
   expect(packageJson.scripts?.["check:launch"] === "node dist/scripts/check-launch.js", "scripts.check:launch must run dist/scripts/check-launch.js", issues);
   expect(packageJson.scripts?.["check:surface"] === "node dist/scripts/check-surface.js", "scripts.check:surface must run dist/scripts/check-surface.js", issues);
+  expect(packageJson.scripts?.["check:published"] === "node dist/scripts/check-published.js", "scripts.check:published must run dist/scripts/check-published.js", issues);
   expect(packageJson.scripts?.["check:walkthrough"] === "node dist/scripts/check-walkthrough.js", "scripts.check:walkthrough must run dist/scripts/check-walkthrough.js", issues);
   expect(packageJson.scripts?.prepack?.includes("check:surface") === true, "prepack must run check:surface", issues);
   expect(packageJson.scripts?.prepack?.includes("check:walkthrough") === true, "prepack must run check:walkthrough", issues);

@@ -51,6 +51,7 @@
     "check:install": "node dist/scripts/check-install.js",
     "check:launch": "node dist/scripts/check-launch.js",
     "check:package": "node dist/scripts/check-package.js",
+    "check:published": "node dist/scripts/check-published.js",
     "check:release": "node dist/scripts/check-release.js",
     "check:stack": "node dist/scripts/check-stack.js",
     "check:surface": "node dist/scripts/check-surface.js",

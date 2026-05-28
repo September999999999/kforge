@@ -46,9 +46,10 @@ context, workflow, doctor, and score reports.
 
 ## 3. Inspect the Repo
 
-Start with the agent context:
+Start with the dashboard and agent context:
 
 ```bash
+kforge dashboard .
 kforge context .
 ```
 

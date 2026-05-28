@@ -233,6 +233,7 @@ cd ./kforge-demo
 Try the agent workflow:
 
 ```bash
+kforge dashboard .
 kforge context .
 kforge workflow .
 kforge agent next . --agent local-agent --json
@@ -496,6 +497,8 @@ kforge score [path] [--write]
                          print or write a trust score report
 kforge context [path] [--write]
                          print or write an agent context pack
+kforge dashboard [path] [--write] [--json]
+                         print or write an Obsidian-friendly status dashboard
 kforge handoff [path] [--write]
                          print or write an agent handoff packet
 kforge workflow [path] [--write]

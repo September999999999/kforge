@@ -30,6 +30,11 @@ export interface ContextOptions {
   write?: boolean;
 }
 
+export interface DashboardOptions {
+  write?: boolean;
+  json?: boolean;
+}
+
 export interface GraphOptions {
   write?: boolean;
 }
@@ -151,6 +156,29 @@ export interface OutputInspectPayload {
   sources: string[];
   referencedBy: string[];
   suggestedCommands: string[];
+}
+
+export interface DashboardPayload {
+  ok: true;
+  updatedAt: string;
+  counts: {
+    rawSources: number;
+    wikiPages: number;
+    claims: number;
+    reviews: number;
+    outputs: number;
+    openReviews: number;
+    openTasks: number;
+    runningRuns: number;
+  };
+  health: {
+    doctor: "clean" | "needs_attention";
+    trustScore?: number;
+    claimAudit: "clean" | "needs_attention";
+    agentGaps: number;
+  };
+  next: string[];
+  links: Array<{ label: string; file: string }>;
 }
 
 export interface ScoreOptions {
@@ -882,6 +910,7 @@ export function refreshRepo(repoPath: string): CommandResult {
     ["index", indexRepo(repoPath)] as const,
     ["compile-plan", compilePlanRepo(repoPath, { write: true })] as const,
     ["context", contextRepo(repoPath, { write: true })] as const,
+    ["dashboard", dashboardRepo(repoPath, { write: true })] as const,
     ["workflow", workflowRepo(repoPath, { write: true })] as const,
     ["claim-audit", auditClaims(repoPath, { write: true })] as const,
     ["doctor", doctorRepo(repoPath, { write: true })] as const,
@@ -897,6 +926,27 @@ export function refreshRepo(repoPath: string): CommandResult {
   ];
 
   return { ok, messages };
+}
+
+export function dashboardRepo(repoPath: string, options: DashboardOptions = {}): CommandResult {
+  requireRepo(repoPath);
+
+  const payload = dashboardPayload(repoPath);
+  const content = dashboardReport(payload);
+  if (options.write) {
+    const target = path.join(repoPath, "indexes", "dashboard.md");
+    mkdirSyncish(path.dirname(target));
+    writeFileSyncish(target, content);
+    if (!options.json) {
+      return { ok: true, messages: [`Updated ${toRepoPath(repoPath, target)}`] };
+    }
+  }
+
+  if (options.json) {
+    return { ok: true, messages: [JSON.stringify(payload, null, 2)] };
+  }
+
+  return { ok: true, messages: [content] };
 }
 
 export function addSource(repoPath: string, options: AddSourceOptions): CommandResult {
@@ -3455,6 +3505,142 @@ function outputInspectPayload(repoPath: string, file: string): OutputInspectPayl
   }
 
   return payload;
+}
+
+function dashboardPayload(repoPath: string): DashboardPayload {
+  const rawFiles = rawSourceFiles(repoPath);
+  const wikiFiles = iterFiles(path.join(repoPath, "wiki"));
+  const claimFiles = iterFiles(path.join(repoPath, "claims"));
+  const reviewFiles = iterFiles(path.join(repoPath, "reviews"));
+  const outputFiles = iterFiles(path.join(repoPath, "outputs"));
+  const taskSnapshot = taskListPayload("all", taskItems(repoPath));
+  const runItemsAll = runItems(repoPath);
+  const agentBoardPayload = JSON.parse(agentBoard(repoPath, { json: true }).messages[0]) as AgentBoardPayload;
+  const doctor = doctorRepo(repoPath);
+  const claimAudit = claimAuditData(repoPath);
+  const { trustScore } = trustScoreData(repoPath);
+  const openReviews = reviewFiles.filter((file) => isOpenReviewStatus(documentField(readText(file), "Status") ?? "unknown")).length;
+  const openTasks = taskSnapshot.items.filter((task) => task.status === "open").length;
+  const runningRuns = runItemsAll.filter((run) => run.status === "running").length;
+  const agentGaps = agentBoardPayload.counts.orphanClaimedTasks + agentBoardPayload.counts.runsWithoutClaimedTask;
+
+  return {
+    ok: true,
+    updatedAt: today(),
+    counts: {
+      rawSources: rawFiles.length,
+      wikiPages: wikiFiles.length,
+      claims: claimFiles.length,
+      reviews: reviewFiles.length,
+      outputs: outputFiles.length,
+      openReviews,
+      openTasks,
+      runningRuns,
+    },
+    health: {
+      doctor: doctor.ok ? "clean" : "needs_attention",
+      ...(trustScore === undefined ? {} : { trustScore }),
+      claimAudit: claimAudit.status,
+      agentGaps,
+    },
+    next: dashboardNextCommands({
+      doctorOk: doctor.ok,
+      openReviews,
+      openTasks,
+      runningRuns,
+      agentGaps,
+      outputCount: outputFiles.length,
+      queuedSources: compilePlanCandidates(repoPath).filter((item) => item.status === "queued").length,
+    }),
+    links: [
+      { label: "Brief", file: "indexes/brief.md" },
+      { label: "Agent context", file: "indexes/context.md" },
+      { label: "Workflow", file: "indexes/workflow.md" },
+      { label: "Doctor", file: "indexes/doctor.md" },
+      { label: "Score", file: "indexes/score.md" },
+      { label: "Compile plan", file: "indexes/compile-plan.md" },
+      { label: "Wiki graph", file: "indexes/backlinks.md" },
+      { label: "Claims", file: "indexes/claim-index.md" },
+      { label: "Reviews", file: "indexes/review-index.md" },
+    ],
+  };
+}
+
+function dashboardReport(payload: DashboardPayload): string {
+  const lines = [
+    GENERATED_HEADER,
+    "# Knowledge Dashboard",
+    "",
+    `Updated: ${payload.updatedAt}`,
+    "",
+    "## Health",
+    "",
+    `- doctor: ${payload.health.doctor}`,
+    `- trust score: ${payload.health.trustScore === undefined ? "n/a" : `${payload.health.trustScore}/100`}`,
+    `- claim audit: ${payload.health.claimAudit}`,
+    `- agent coordination gaps: ${payload.health.agentGaps}`,
+    "",
+    "## Repo Counts",
+    "",
+    `- raw sources: ${payload.counts.rawSources}`,
+    `- wiki pages: ${payload.counts.wikiPages}`,
+    `- claims: ${payload.counts.claims}`,
+    `- reviews: ${payload.counts.reviews}`,
+    `- outputs: ${payload.counts.outputs}`,
+    "",
+    "## Work Queue",
+    "",
+    `- open reviews: ${payload.counts.openReviews}`,
+    `- open tasks: ${payload.counts.openTasks}`,
+    `- running runs: ${payload.counts.runningRuns}`,
+    "",
+    "## Open In Obsidian",
+    "",
+    ...payload.links.map((link) => `- [${link.label}](../${link.file})`),
+    "",
+    "## Next Commands",
+    "",
+    ...payload.next.map((command) => `- \`${command}\``),
+    "",
+  ];
+
+  return lines.join("\n");
+}
+
+function dashboardNextCommands(input: {
+  doctorOk: boolean;
+  openReviews: number;
+  openTasks: number;
+  runningRuns: number;
+  agentGaps: number;
+  outputCount: number;
+  queuedSources: number;
+}): string[] {
+  if (!input.doctorOk) {
+    return ["kforge doctor .", "kforge index .", "kforge refresh ."];
+  }
+
+  if (input.agentGaps > 0 || input.runningRuns > 0) {
+    return ["kforge agent board . --json", "kforge run list . --status all --json", "kforge task list . --status all --json"];
+  }
+
+  if (input.openTasks > 0) {
+    return ["kforge agent plan . --agent local-agent --json", "kforge agent board . --json"];
+  }
+
+  if (input.openReviews > 0) {
+    return ["kforge task seed . --json", "kforge agent plan . --agent local-agent --json"];
+  }
+
+  if (input.queuedSources > 0) {
+    return ["kforge compile review . --limit 3 --json", "kforge task seed . --json"];
+  }
+
+  if (input.outputCount > 0) {
+    return ["kforge output list . --json", "kforge output inspect . --file <outputs/file> --json", "kforge promote . --file <outputs/file> --target wiki/<Page>.md --json"];
+  }
+
+  return ["kforge source add . --file <local-file>", "kforge refresh ."];
 }
 
 function wikiMap(repoPath: string, files: string[]): string {

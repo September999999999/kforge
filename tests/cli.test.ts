@@ -18,6 +18,7 @@ test("cli help exposes the public command surface", async () => {
   assert.match(result.stdout, /kforge doctor \[path\] \[--write\] \[--json\]/);
   assert.match(result.stdout, /kforge handoff \[path\] \[--write\]/);
   assert.match(result.stdout, /kforge workflow \[path\] \[--write\]/);
+  assert.match(result.stdout, /kforge dashboard \[path\] \[--write\] \[--json\]/);
   assert.match(result.stdout, /kforge agent next \[path\].*--agent <name>.*\[--json\]/);
   assert.match(result.stdout, /kforge agent step \[path\].*--agent <name>.*\[--json\]/);
   assert.match(result.stdout, /kforge agent draft \[path\].*--agent <name>.*\[--json\]/);
@@ -58,6 +59,9 @@ test("cli can run the documented demo workflow", async () => {
     const refresh = await runCli(["refresh", repoPath]);
     const search = await runCli(["search", repoPath, "--query", "provenance"]);
     const inspect = await runCli(["inspect", repoPath, "--file", "wiki/Provenance.md"]);
+    const dashboard = await runCli(["dashboard", repoPath]);
+    const dashboardJson = await runCli(["dashboard", repoPath, "--json"]);
+    const dashboardWriteJson = await runCli(["dashboard", repoPath, "--write", "--json"]);
     const handoff = await runCli(["handoff", repoPath]);
     const reviewQueue = await runCli(["review", "queue", repoPath]);
     const reviewQueueJson = await runCli(["review", "queue", repoPath, "--json"]);
@@ -76,6 +80,14 @@ test("cli can run the documented demo workflow", async () => {
     assert.match(search.stdout, /# Search Results/);
     assert.equal(inspect.exitCode, 0);
     assert.match(inspect.stdout, /# File Inspect/);
+    assert.equal(dashboard.exitCode, 0);
+    assert.match(dashboard.stdout, /# Knowledge Dashboard/);
+    assert.match(dashboard.stdout, /## Open In Obsidian/);
+    assert.equal(dashboardJson.exitCode, 0);
+    assert.equal(JSON.parse(dashboardJson.stdout).counts.rawSources, 1);
+    assert.equal(dashboardWriteJson.exitCode, 0);
+    assert.equal(JSON.parse(dashboardWriteJson.stdout).health.doctor, "clean");
+    assert.match(await readFile(path.join(repoPath, "indexes", "dashboard.md"), "utf8"), /# Knowledge Dashboard/);
     assert.equal(handoff.exitCode, 0);
     assert.match(handoff.stdout, /# Agent Handoff/);
     assert.equal(reviewQueue.exitCode, 0);

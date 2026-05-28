@@ -41,6 +41,8 @@ accepts a `path` argument when an agent needs to operate on a different repo.
 - `kforge_source_list`: list raw sources and metadata sidecars
 - `kforge_source_inspect`: inspect one raw source, metadata, and local references
 - `kforge_context`: read or write the agent context pack
+- `kforge_dashboard`: read or write an Obsidian-friendly repo dashboard with
+  health, work queue, agent state, and index links
 - `kforge_handoff`: read or write an agent handoff packet
 - `kforge_workflow`: read or write the agent workflow runbook
 - `kforge_agent_templates`: list installable agent instruction templates

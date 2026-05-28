@@ -23,6 +23,7 @@ import {
   contextRepo,
   createClaim,
   createReview,
+  dashboardRepo,
   demoRepo,
   doctorRepo,
   finishRun,
@@ -67,6 +68,7 @@ import {
   type AgentStepPayload,
   type SourceAddPayload,
   type CompileDraftPayload,
+  type DashboardPayload,
   type OutputInspectPayload,
   type OutputListPayload,
   type PromoteOutputPayload,
@@ -119,6 +121,7 @@ test("init with example creates a usable demo repo", async () => {
     await assertFileExists(path.join(repoPath, "outputs", "example-task-pack.md"));
     assert.match(await readFile(path.join(repoPath, "indexes", "source-inventory.md"), "utf8"), /llm-knowledge-bases/);
     assert.match(await readFile(path.join(repoPath, "indexes", "context.md"), "utf8"), /# Agent Context/);
+    assert.match(await readFile(path.join(repoPath, "indexes", "dashboard.md"), "utf8"), /# Knowledge Dashboard/);
     assert.match(await readFile(path.join(repoPath, "indexes", "workflow.md"), "utf8"), /# Agent Workflow Runbook/);
     assert.match(await readFile(path.join(repoPath, "indexes", "doctor.md"), "utf8"), /Status: clean/);
     assert.match(await readFile(path.join(repoPath, "indexes", "score.md"), "utf8"), /# Trust Score/);
@@ -220,13 +223,46 @@ test("refresh writes indexes and derived reports", async () => {
     await assertFileExists(path.join(repoPath, "indexes", "source-inventory.md"));
     await assertFileExists(path.join(repoPath, "indexes", "compile-plan.md"));
     await assertFileExists(path.join(repoPath, "indexes", "context.md"));
+    await assertFileExists(path.join(repoPath, "indexes", "dashboard.md"));
     await assertFileExists(path.join(repoPath, "indexes", "workflow.md"));
     await assertFileExists(path.join(repoPath, "indexes", "claim-audit.md"));
     await assertFileExists(path.join(repoPath, "indexes", "doctor.md"));
     await assertFileExists(path.join(repoPath, "indexes", "score.md"));
     assert.match(await readFile(path.join(repoPath, "indexes", "claim-audit.md"), "utf8"), /# Claim Audit/);
     assert.match(await readFile(path.join(repoPath, "indexes", "compile-plan.md"), "utf8"), /# Compile Plan/);
+    assert.match(await readFile(path.join(repoPath, "indexes", "dashboard.md"), "utf8"), /# Knowledge Dashboard/);
     assert.match(await readFile(path.join(repoPath, "indexes", "doctor.md"), "utf8"), /Status: clean/);
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test("dashboard prints and writes an Obsidian-friendly status entrypoint", async () => {
+  const repoPath = await tempRepoPath();
+  try {
+    initRepo(repoPath, { example: true });
+
+    const printed = dashboardRepo(repoPath);
+    const json = JSON.parse(dashboardRepo(repoPath, { json: true }).messages[0]) as DashboardPayload;
+    const written = dashboardRepo(repoPath, { write: true });
+
+    assert.equal(printed.ok, true);
+    assert.match(printed.messages[0], /# Knowledge Dashboard/);
+    assert.match(printed.messages[0], /## Open In Obsidian/);
+    assert.equal(json.ok, true);
+    assert.equal(json.counts.rawSources, 1);
+    assert.equal(json.counts.wikiPages, 3);
+    assert.equal(json.counts.claims, 1);
+    assert.equal(json.counts.reviews, 1);
+    assert.equal(json.counts.outputs, 1);
+    assert.equal(json.health.doctor, "clean");
+    assert.equal(json.health.claimAudit, "clean");
+    assert.equal(json.health.agentGaps, 0);
+    assert.equal(json.links.some((link) => link.file === "indexes/context.md"), true);
+    assert.match(json.next.join("\n"), /task seed|agent plan|output list|source add|doctor/);
+    assert.equal(written.ok, true);
+    assert.match(written.messages[0], /indexes\/dashboard.md/);
+    assert.match(await readFile(path.join(repoPath, "indexes", "dashboard.md"), "utf8"), /# Knowledge Dashboard/);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }

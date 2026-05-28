@@ -32,6 +32,7 @@ test("mcp server exposes kforge tools over stdio", async () => {
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_list"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_inspect"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_context"), true);
+    assert.equal(tools.tools.some((tool) => tool.name === "kforge_dashboard"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_graph"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_handoff"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_workflow"), true);
@@ -76,6 +77,20 @@ test("mcp server exposes kforge tools over stdio", async () => {
 
     const context = await client.callTool({ name: "kforge_context", arguments: {} });
     assert.match(firstText(context.content), /# Agent Context/);
+
+    const dashboard = await client.callTool({ name: "kforge_dashboard", arguments: {} });
+    assert.match(firstText(dashboard.content), /# Knowledge Dashboard/);
+    assert.match(firstText(dashboard.content), /## Next Commands/);
+
+    const dashboardJson = await client.callTool({
+      name: "kforge_dashboard",
+      arguments: {
+        write: true,
+        json: true,
+      },
+    });
+    assert.equal(JSON.parse(firstText(dashboardJson.content)).counts.rawSources, 1);
+    assert.match(await readFile(path.join(repoPath, "indexes", "dashboard.md"), "utf8"), /# Knowledge Dashboard/);
 
     const demo = await client.callTool({
       name: "kforge_demo",

@@ -217,12 +217,17 @@ humans usually read first:
 - `indexes/claim-audit.md`
 - `indexes/review-index.md`
 - `indexes/context.md`
+- `indexes/dashboard.md`
 - `indexes/workflow.md`
 - `indexes/doctor.md`
 - `indexes/score.md`
 
 It does not call an LLM provider and does not rewrite `raw/`, `wiki/`,
 `claims/`, `outputs/`, or `reviews/`.
+
+`kforge dashboard --write` can also be run directly. It writes an
+Obsidian-friendly `indexes/dashboard.md` entry point with health, work queue,
+agent board, and index links.
 
 ### `AGENTS.md`
 

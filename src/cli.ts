@@ -23,6 +23,7 @@ import {
   contextRepo,
   createClaim,
   createReview,
+  dashboardRepo,
   demoRepo,
   doctorRepo,
   finishRun,
@@ -78,6 +79,7 @@ type Command =
   | "doctor"
   | "score"
   | "context"
+  | "dashboard"
   | "handoff"
   | "workflow"
   | "graph"
@@ -189,6 +191,10 @@ function runRepoCommand(
 
   if (command === "context") {
     return contextRepo(repoPath, { write });
+  }
+
+  if (command === "dashboard") {
+    return dashboardRepo(repoPath, { write, json });
   }
 
   if (command === "handoff") {
@@ -950,6 +956,7 @@ function isCommand(value: string): value is Command {
     value === "doctor" ||
     value === "score" ||
     value === "context" ||
+    value === "dashboard" ||
     value === "handoff" ||
     value === "workflow" ||
     value === "graph" ||
@@ -981,6 +988,7 @@ Usage:
   kforge doctor [path] [--write] [--json]              run health checks
   kforge score [path] [--write]                        print or write a trust score report
   kforge context [path] [--write]                      print or write an agent context pack
+  kforge dashboard [path] [--write] [--json]           print or write an Obsidian-friendly status dashboard
   kforge handoff [path] [--write]                      print or write an agent handoff packet
   kforge workflow [path] [--write]                     print or write an agent workflow runbook
   kforge graph [path] [--write]                        print or write wiki backlinks and orphan report

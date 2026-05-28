@@ -28,6 +28,7 @@ import {
   contextRepo,
   createClaim,
   createReview,
+  dashboardRepo,
   demoRepo,
   doctorRepo,
   finishRun,
@@ -250,6 +251,21 @@ export function createKforgeMcpServer(options: McpOptions = {}): McpServer {
     },
     async ({ path: repoPath, write }) =>
       runAsTool(() => contextRepo(toolRepoPath(defaultRepoPath, repoPath), { write })),
+  );
+
+  server.registerTool(
+    "kforge_dashboard",
+    {
+      title: "Read knowledge dashboard",
+      description: "Return or write an Obsidian-friendly repo dashboard with health, queue, agent, and index links.",
+      inputSchema: z.object({
+        path: repoPathSchema,
+        write: z.boolean().optional(),
+        json: z.boolean().optional(),
+      }),
+    },
+    async ({ path: repoPath, write, json }) =>
+      runAsTool(() => dashboardRepo(toolRepoPath(defaultRepoPath, repoPath), { write, json })),
   );
 
   server.registerTool(

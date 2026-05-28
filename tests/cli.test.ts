@@ -22,6 +22,7 @@ test("cli help exposes the public command surface", async () => {
   assert.match(result.stdout, /kforge handoff \[path\] \[--write\]/);
   assert.match(result.stdout, /kforge workflow \[path\] \[--write\]/);
   assert.match(result.stdout, /kforge dashboard \[path\] \[--write\] \[--json\]/);
+  assert.match(result.stdout, /kforge web \[path\] \[--host <host>\] \[--port <n>\]/);
   assert.match(result.stdout, /kforge agent next \[path\].*--agent <name>.*\[--json\]/);
   assert.match(result.stdout, /kforge agent step \[path\].*--agent <name>.*\[--json\]/);
   assert.match(result.stdout, /kforge agent draft \[path\].*--agent <name>.*\[--json\]/);

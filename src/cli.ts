@@ -3,6 +3,7 @@
 import { homedir } from "node:os";
 import path from "node:path";
 import { VERSION } from "./version.js";
+import { serveWebDashboard } from "./web.js";
 import {
   addSource,
   agentBoard,
@@ -101,6 +102,7 @@ type Command =
   | "source"
   | "claim"
   | "review"
+  | "web"
   | "version";
 
 async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
@@ -124,7 +126,9 @@ async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
 
   try {
     let result: CommandResult;
-    if (command === "source") {
+    if (command === "web") {
+      result = await runWebCommand(args);
+    } else if (command === "source") {
       result = await runSourceCommand(args);
     } else if (command === "output") {
       result = runOutputCommand(args);
@@ -162,7 +166,7 @@ async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
 }
 
 function runRepoCommand(
-  command: Exclude<Command, "version" | "agent" | "claim" | "review" | "task" | "run" | "search" | "ask" | "inspect" | "compile" | "pack" | "promote" | "output">,
+  command: Exclude<Command, "version" | "agent" | "claim" | "review" | "task" | "run" | "search" | "ask" | "inspect" | "compile" | "pack" | "promote" | "output" | "web">,
   args: string[],
 ): CommandResult {
   const force = args.includes("--force");
@@ -232,6 +236,29 @@ function runRepoCommand(
   }
 
   return doctorRepo(repoPath, { write, json });
+}
+
+async function runWebCommand(args: string[]): Promise<CommandResult> {
+  const parsed = parseArgs(args);
+  const repoPath = resolveRepoPath(parsed.positionals[0] ?? ".");
+  const host = oneOption(parsed.options, "host", false);
+  const portValue = oneOption(parsed.options, "port", false);
+  const port = portValue ? parsePositiveInteger(portValue, "--port") : undefined;
+  const handle = await serveWebDashboard(repoPath, { host, port });
+  console.log(`kforge web dashboard: ${handle.url}`);
+  console.log("Press Ctrl+C to stop.");
+
+  await new Promise<void>((resolve) => {
+    const shutdown = () => {
+      process.off("SIGINT", shutdown);
+      process.off("SIGTERM", shutdown);
+      void handle.close().finally(resolve);
+    };
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
+  });
+
+  return { ok: true, messages: ["Stopped kforge web dashboard."] };
 }
 
 function runOutputCommand(args: string[]): CommandResult {
@@ -1051,6 +1078,7 @@ function isCommand(value: string): value is Command {
     value === "source" ||
     value === "claim" ||
     value === "review" ||
+    value === "web" ||
     value === "version"
   );
 }
@@ -1072,6 +1100,7 @@ Usage:
   kforge handoff [path] [--write]                      print or write an agent handoff packet
   kforge workflow [path] [--write]                     print or write an agent workflow runbook
   kforge graph [path] [--write]                        print or write wiki backlinks and orphan report
+  kforge web [path] [--host <host>] [--port <n>]        run a local web dashboard
   kforge agent next [path] --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]
                                                        claim next task and start a run
   kforge agent step [path] --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]

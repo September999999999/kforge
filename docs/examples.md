@@ -365,6 +365,16 @@ kforge agent board ./my-topic
 The board highlights active agents, open tasks, claimed tasks without running
 runs, and running runs whose task is no longer claimed.
 
+Open the same operational view in a browser:
+
+```bash
+kforge web ./my-topic
+```
+
+The local dashboard is useful when a repo has several reviews, tasks, and agent
+runs in flight. It keeps the source of truth in files and calls the same
+deterministic commands as the CLI.
+
 For compile reviews, `kforge review next` shows the source, target, compile
 draft, and Proposed Content writeback commands to run next. The draft carries
 source metadata, source excerpts, and existing target context when available.

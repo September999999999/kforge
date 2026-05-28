@@ -53,6 +53,16 @@ kforge dashboard .
 kforge context .
 ```
 
+For a browser-based local control surface, run:
+
+```bash
+kforge web .
+```
+
+The web dashboard listens on `127.0.0.1` by default and shows repo health,
+review queue, task queue, runs, active agents, and safe actions for refresh,
+bootstrap, and writing agent launch scripts.
+
 Create a compact handoff packet:
 
 ```bash

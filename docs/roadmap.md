@@ -83,6 +83,8 @@ Goal: make the protocol usable from common AI and PKM environments.
 - Codex/Claude Code/Cursor agent templates through `kforge agent` and MCP tools
 - MCP server for read/search/write/review operations
 - stdio `kforge-mcp` server wrapping current CLI operations
+- localhost web dashboard for repo status, review queues, task queues, runs,
+  agents, and safe workflow actions
 - task seeding, next-task claiming, completion, and release for parallel agent
   runs, including JSON and MCP tools
 - multi-agent run planning from one review queue, including JSON and MCP tools

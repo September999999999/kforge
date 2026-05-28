@@ -153,6 +153,8 @@ tools that do not require an LLM provider:
 - generate a parallel agent launch script, or execute it when a worker command
   template is configured
 - inspect multi-agent board state and coordination gaps
+- run a localhost web dashboard for repo status, review queues, task queues,
+  running agents, and safe workflow actions
 - run structural health checks for links and local source references
 - validate the `kb.yaml` protocol manifest
 - detect stale generated index files after repo changes
@@ -455,6 +457,16 @@ Or save the workflow runbook into `indexes/`:
 kforge workflow ~/research/my-topic --write
 ```
 
+Open the local web dashboard:
+
+```bash
+kforge web ~/research/my-topic
+```
+
+The web dashboard binds to `127.0.0.1` by default. It shows repo health, review
+queue, task queue, runs, active agents, and low-risk workflow actions such as
+refresh, bootstrap, and writing an agent launcher.
+
 Search the repo:
 
 ```bash
@@ -568,6 +580,8 @@ kforge workflow [path] [--write]
                          print or write an agent workflow runbook
 kforge graph [path] [--write]
                          print or write wiki backlinks and orphan report
+kforge web [path] [--host <host>] [--port <n>]
+                         run a local web dashboard
 kforge agent next [path] --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]
                          claim next task and start a run
 kforge agent step [path] --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]

@@ -2737,7 +2737,10 @@ export function agentLaunch(repoPath: string, options: AgentLaunchOptions): Comm
     source = "planned";
   }
 
-  const assignments = planned?.assignments ?? agents.flatMap((agent) => currentAgentLaunchAssignment(repoPath, agent));
+  const assignments =
+    planned?.assignments && planned.assignments.length > 0
+      ? planned.assignments
+      : agents.flatMap((agent) => currentAgentLaunchAssignment(repoPath, agent));
   const items = assignments.map((assignment) => agentLaunchItem(repoPath, assignment, commandTemplate));
   const scriptContent = agentLaunchScript(repoPath, items);
   let scriptFile: string | undefined;

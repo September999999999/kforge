@@ -1,5 +1,6 @@
 export { VERSION } from "./version.js";
 export { createKforgeMcpServer, runMcpServer } from "./mcp.js";
+export { serveWebDashboard, type WebDashboardHandle, type WebDashboardOptions } from "./web.js";
 export {
   CANONICAL_DIRS,
   addSource,

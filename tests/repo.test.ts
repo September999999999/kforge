@@ -99,6 +99,7 @@ import {
   type TaskReleasePayload,
   type TaskSeedPayload,
 } from "../src/repo.js";
+import { serveWebDashboard } from "../src/web.js";
 
 test("init creates the canonical layout", async () => {
   const repoPath = await tempRepoPath();
@@ -304,6 +305,55 @@ test("dashboard prints and writes an Obsidian-friendly status entrypoint", async
     assert.equal(written.ok, true);
     assert.match(written.messages[0], /indexes\/dashboard.md/);
     assert.match(await readFile(path.join(repoPath, "indexes", "dashboard.md"), "utf8"), /# Knowledge Dashboard/);
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test("web dashboard serves repo state and safe actions", async () => {
+  const repoPath = await tempRepoPath();
+  try {
+    initRepo(repoPath);
+    await writeFile(path.join(repoPath, "raw", "source.md"), "# Source\n", "utf8");
+    createReview(repoPath, {
+      title: "Web Review",
+      targets: ["wiki/Web Review.md"],
+      sources: ["raw/source.md"],
+      kind: "compile",
+    });
+
+    const handle = await serveWebDashboard(repoPath, { port: 0 });
+    try {
+      const html = await fetchText(`${handle.url}/`);
+      const state = (await fetchJson(`${handle.url}/api/state`)) as {
+        ok?: boolean;
+        dashboard?: { counts?: { rawSources?: number; reviews?: number } };
+        reviews?: { total?: number };
+        tasks?: { total?: number };
+      };
+      const refresh = (await fetchJson(`${handle.url}/api/refresh`, { method: "POST" })) as { ok?: boolean };
+      const launch = (await fetchJson(`${handle.url}/api/agent-launch`, {
+        method: "POST",
+        body: JSON.stringify({
+          agents: ["web-a"],
+          command: "printf {agent}:{run}",
+        }),
+      })) as { ok?: boolean; payload?: { script?: { file?: string }; items?: unknown[] } };
+
+      assert.match(html, /Knowledge Repo Dashboard/);
+      assert.equal(state.ok, true);
+      assert.equal(state.dashboard?.counts?.rawSources, 1);
+      assert.equal(state.dashboard?.counts?.reviews, 1);
+      assert.equal(state.reviews?.total, 1);
+      assert.equal(state.tasks?.total, 0);
+      assert.equal(refresh.ok, true);
+      assert.equal(launch.ok, true);
+      assert.equal(launch.payload?.items?.length, 1);
+      assert.match(launch.payload?.script?.file ?? "", /^runs\/.+agent-launch.*\.sh$/);
+      assert.match(await readFile(path.join(repoPath, launch.payload?.script?.file ?? ""), "utf8"), /printf web-a:runs\//);
+    } finally {
+      await handle.close();
+    }
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }
@@ -2919,6 +2969,21 @@ async function assertFileExists(target: string): Promise<void> {
 
 async function assertFileMissing(target: string): Promise<void> {
   await assert.rejects(import("node:fs/promises").then((fs) => fs.stat(target)), { code: "ENOENT" });
+}
+
+async function fetchText(url: string): Promise<string> {
+  const response = await fetch(url);
+  assert.equal(response.ok, true);
+  return response.text();
+}
+
+async function fetchJson(url: string, init?: RequestInit): Promise<unknown> {
+  const response = await fetch(url, {
+    headers: { "content-type": "application/json" },
+    ...init,
+  });
+  assert.equal(response.ok, true);
+  return response.json() as Promise<unknown>;
 }
 
 async function startHttpServer(

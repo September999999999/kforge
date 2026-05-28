@@ -375,7 +375,8 @@ The local dashboard is useful when a repo has several reviews, tasks, and agent
 runs in flight. It keeps the source of truth in files and calls the same
 deterministic commands as the CLI. Review rows can be opened in-place to inspect
 the review file and deterministic file summary, save Proposed Content, accept or
-reject the review, and preview the apply step as a dry run.
+reject the review, preview the apply step as a dry run, and explicitly apply an
+accepted review.
 
 For compile reviews, `kforge review next` shows the source, target, compile
 draft, and Proposed Content writeback commands to run next. The draft carries

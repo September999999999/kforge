@@ -130,6 +130,22 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
       return;
     }
 
+    if (request.method === "POST" && url.pathname === "/api/review-apply") {
+      const body = await readJsonBody(request);
+      const file = optionalString(body.file);
+      if (!file) {
+        sendJson(response, 400, { ok: false, error: "review file is required" });
+        return;
+      }
+      const result = applyReview(repoPath, {
+        file,
+        note: optionalString(body.note) ?? "Applied from kforge web dashboard.",
+        json: true,
+      });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
     if (request.method === "POST" && url.pathname === "/api/bootstrap") {
       const body = await readJsonBody(request);
       const agents = stringList(body.agents);
@@ -814,6 +830,7 @@ function webDashboardHtml(): string {
         '<button class="button small danger" type="button" data-review-status="rejected">Reject</button>' +
         '<button class="button small" type="button" data-review-status="proposed">Reopen</button>' +
         '<button class="button small" type="button" data-apply-preview="true">Apply Dry Run</button>' +
+        '<button class="button small primary" type="button" data-apply-review="true">Apply Accepted Review</button>' +
         '</div>';
     }
 
@@ -844,6 +861,9 @@ function webDashboardHtml(): string {
       }
       for (const button of document.querySelectorAll("[data-apply-preview]")) {
         button.addEventListener("click", () => previewApply(file));
+      }
+      for (const button of document.querySelectorAll("[data-apply-review]")) {
+        button.addEventListener("click", () => applyAcceptedReview(file));
       }
     }
 
@@ -899,6 +919,24 @@ function webDashboardHtml(): string {
           preview.innerHTML = '<div class="viewer-meta"><span class="status ok">dry run</span><code>' + h(payload.target || "") + '</code></div><pre>' + h(payload.content || result.messages?.join("\\n") || "") + '</pre>';
         }
         toast("Apply preview ready");
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function applyAcceptedReview(file) {
+      if (!file) return;
+      setBusy(true);
+      try {
+        const result = await api("/api/review-apply", {
+          method: "POST",
+          body: JSON.stringify({ file, note: "Applied from kforge web dashboard." }),
+        });
+        await load();
+        await openFile(file);
+        toast("Applied review to " + (result.payload?.target || "target"));
       } catch (error) {
         toast(error.message || String(error));
       } finally {

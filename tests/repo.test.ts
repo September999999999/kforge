@@ -322,6 +322,12 @@ test("web dashboard serves repo state and safe actions", async () => {
       kind: "compile",
       content: "---\ntitle: Web Review\nsources:\n  - raw/source.md\n---\n# Web Review\n\nCompiled from the web dashboard.\n",
     });
+    createReview(repoPath, {
+      title: "Web Launch Review",
+      targets: ["wiki/Web Launch Review.md"],
+      sources: ["raw/source.md"],
+      kind: "compile",
+    });
 
     const handle = await serveWebDashboard(repoPath, { port: 0 });
     try {
@@ -333,6 +339,7 @@ test("web dashboard serves repo state and safe actions", async () => {
         tasks?: { total?: number };
       };
       const reviewFile = state.reviews?.items?.[0]?.file ?? "";
+      const secondaryReviewFile = state.reviews?.items?.find((item) => item.file !== reviewFile)?.file ?? "";
       const filePreview = (await fetchJson(`${handle.url}/api/file?path=${encodeURIComponent(reviewFile)}`)) as {
         ok?: boolean;
         file?: string;
@@ -358,13 +365,21 @@ test("web dashboard serves repo state and safe actions", async () => {
         method: "POST",
         body: JSON.stringify({ file: reviewFile }),
       })) as { ok?: boolean; payload?: { dryRun?: boolean; target?: string; content?: string } };
+      const apply = (await fetchJson(`${handle.url}/api/review-apply`, {
+        method: "POST",
+        body: JSON.stringify({ file: reviewFile, note: "Applied from web test." }),
+      })) as { ok?: boolean; payload?: { dryRun?: boolean; target?: string; status?: string } };
+      const appliedPreview = (await fetchJson(`${handle.url}/api/file?path=${encodeURIComponent(reviewFile)}`)) as {
+        ok?: boolean;
+        content?: string;
+      };
       const reject = (await fetchJson(`${handle.url}/api/review-status`, {
         method: "POST",
-        body: JSON.stringify({ file: reviewFile, status: "rejected" }),
+        body: JSON.stringify({ file: secondaryReviewFile, status: "rejected" }),
       })) as { ok?: boolean; payload?: { status?: string } };
       const reopen = (await fetchJson(`${handle.url}/api/review-status`, {
         method: "POST",
-        body: JSON.stringify({ file: reviewFile, status: "proposed" }),
+        body: JSON.stringify({ file: secondaryReviewFile, status: "proposed" }),
       })) as { ok?: boolean; payload?: { status?: string } };
       const invalidStatus = await fetch(`${handle.url}/api/review-status`, {
         method: "POST",
@@ -389,8 +404,8 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.match(html, /File Preview/);
       assert.equal(state.ok, true);
       assert.equal(state.dashboard?.counts?.rawSources, 1);
-      assert.equal(state.dashboard?.counts?.reviews, 1);
-      assert.equal(state.reviews?.total, 1);
+      assert.equal(state.dashboard?.counts?.reviews, 2);
+      assert.equal(state.reviews?.total, 2);
       assert.equal(state.tasks?.total, 0);
       assert.equal(filePreview.ok, true);
       assert.equal(filePreview.file, reviewFile);
@@ -407,6 +422,12 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(dryRun.payload?.dryRun, true);
       assert.equal(dryRun.payload?.target, "wiki/Web Review.md");
       assert.match(dryRun.payload?.content ?? "", /Updated from the web workbench/);
+      assert.equal(apply.ok, true);
+      assert.equal(apply.payload?.dryRun, false);
+      assert.equal(apply.payload?.target, "wiki/Web Review.md");
+      assert.equal(apply.payload?.status, "applied");
+      assert.match(await readFile(path.join(repoPath, "wiki", "Web Review.md"), "utf8"), /Updated from the web workbench/);
+      assert.match(appliedPreview.content ?? "", /Status: applied/);
       assert.equal(reject.ok, true);
       assert.equal(reject.payload?.status, "rejected");
       assert.equal(reopen.ok, true);

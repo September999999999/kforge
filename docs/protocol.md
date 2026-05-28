@@ -251,9 +251,9 @@ operations. It binds to `127.0.0.1` by default and serves a status view for
 health, reviews, tasks, runs, and agents. It can preview repo files through the
 same inspect path checks as the CLI. Its write actions intentionally stay narrow:
 save structured Proposed Content, accept or reject review artifacts, preview
-review apply as a dry run, refresh derived indexes, bootstrap review-first work,
-and write an agent launcher script. It does not directly apply review content to
-`wiki/` or `claims/`.
+review apply as a dry run, explicitly apply accepted review content, refresh
+derived indexes, bootstrap review-first work, and write an agent launcher script.
+The apply path uses the same accepted-review checks as `kforge review apply`.
 
 `kforge bootstrap` is the deterministic startup pipeline for a newly ingested
 research repo. It runs the review-first setup steps in order: stage queued raw

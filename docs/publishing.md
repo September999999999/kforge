@@ -104,4 +104,6 @@ npm publish
 ```
 
 The package sets `publishConfig.access` to `public`, so the publish command does
-not need `--access public`.
+not need `--access public`. It also sets `publishConfig.registry` to
+`https://registry.npmjs.org/` so local mirror configuration does not redirect the
+public publish.

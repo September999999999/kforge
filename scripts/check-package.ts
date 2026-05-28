@@ -12,7 +12,7 @@ type PackageJson = {
   sideEffects?: boolean;
   license?: string;
   packageManager?: string;
-  publishConfig?: { access?: string };
+  publishConfig?: { access?: string; registry?: string };
   bin?: Record<string, string>;
   files?: string[];
   scripts?: Record<string, string>;
@@ -166,6 +166,7 @@ async function main(): Promise<void> {
   expect(packageJson.license === "MIT", "license must be MIT", issues);
   expect(Boolean(packageJson.packageManager?.startsWith("npm@")), "packageManager must pin npm", issues);
   expect(packageJson.publishConfig?.access === "public", "publishConfig.access must be public", issues);
+  expect(packageJson.publishConfig?.registry === "https://registry.npmjs.org/", "publishConfig.registry must point to npmjs", issues);
   expect(packageJson.engines?.node === ">=20", "engines.node must be >=20", issues);
   expect(packageJson.bin?.kforge === "dist/src/cli.js", "bin.kforge must point to dist/src/cli.js", issues);
   expect(packageJson.bin?.["kforge-mcp"] === "dist/src/mcp.js", "bin.kforge-mcp must point to dist/src/mcp.js", issues);

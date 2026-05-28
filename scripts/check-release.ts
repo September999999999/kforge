@@ -112,6 +112,7 @@ async function main(): Promise<void> {
 
   const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8")) as {
     scripts?: Record<string, string>;
+    publishConfig?: { registry?: string };
     repository?: unknown;
     bugs?: unknown;
     homepage?: unknown;
@@ -128,6 +129,7 @@ async function main(): Promise<void> {
   expect(packageJson.scripts?.prepack?.includes("check:install") === true, "prepack must run check:install", issues);
   expect(packageJson.scripts?.prepack?.includes("check:launch") === true, "prepack must run check:launch", issues);
   expect(packageJson.scripts?.prepack?.includes("check:release") === true, "prepack must run check:release", issues);
+  expect(packageJson.publishConfig?.registry === "https://registry.npmjs.org/", "publishConfig.registry must point to npmjs", issues);
 
   for (const field of ["repository", "bugs", "homepage", "funding"] as const) {
     const value = packageJson[field];

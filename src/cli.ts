@@ -26,6 +26,7 @@ import {
   dashboardRepo,
   demoRepo,
   doctorRepo,
+  fetchSource,
   finishRun,
   graphRepo,
   handoffRepo,
@@ -98,7 +99,7 @@ type Command =
   | "review"
   | "version";
 
-function main(argv: string[] = process.argv.slice(2)): number {
+async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
   const [command, ...args] = argv;
 
   if (!command || command === "--help" || command === "-h") {
@@ -120,7 +121,7 @@ function main(argv: string[] = process.argv.slice(2)): number {
   try {
     let result: CommandResult;
     if (command === "source") {
-      result = runSourceCommand(args);
+      result = await runSourceCommand(args);
     } else if (command === "output") {
       result = runOutputCommand(args);
     } else if (command === "claim") {
@@ -679,7 +680,7 @@ function runSearchCommand(args: string[]): CommandResult {
   return searchRepo(repoPath, { query, limit, scopes });
 }
 
-function runSourceCommand(args: string[]): CommandResult {
+async function runSourceCommand(args: string[]): Promise<CommandResult> {
   const [subcommand, ...rest] = args;
   if (subcommand === "list") {
     const parsed = parseArgs(rest);
@@ -719,9 +720,27 @@ function runSourceCommand(args: string[]): CommandResult {
     return importSources(repoPath, { dir, titlePrefix, url, author, date, license, note, dryRun, json });
   }
 
+  if (subcommand === "fetch") {
+    const parsed = parseArgs(rest);
+    const repoPath = resolveRepoPath(parsed.positionals[0] ?? ".");
+    const url = oneOption(parsed.options, "url");
+    const title = oneOption(parsed.options, "title", false);
+    const author = oneOption(parsed.options, "author", false);
+    const date = oneOption(parsed.options, "date", false);
+    const license = oneOption(parsed.options, "license", false);
+    const note = oneOption(parsed.options, "note", false);
+    const json = flagOption(parsed.options, "json");
+
+    if (!url) {
+      throw new Error("Missing required option: --url");
+    }
+
+    return fetchSource(repoPath, { url, title, author, date, license, note, json });
+  }
+
   if (subcommand !== "add") {
     throw new Error(
-      "Usage: kforge source add [path] --file <local-file> [--json]\n       kforge source import [path] --dir <local-dir> [--dry-run] [--json]\n       kforge source list [path]\n       kforge source inspect [path] --file <raw/file>",
+      "Usage: kforge source add [path] --file <local-file> [--json]\n       kforge source fetch [path] --url <url> [--title <title>] [--json]\n       kforge source import [path] --dir <local-dir> [--dry-run] [--json]\n       kforge source list [path]\n       kforge source inspect [path] --file <raw/file>",
     );
   }
 
@@ -1052,6 +1071,8 @@ Usage:
                                                        finish a run
   kforge source add [path] --file <local-file> [--title <title>] [--url <url>] [--json]
                                                        copy a local source into raw/
+  kforge source fetch [path] --url <url> [--title <title>] [--json]
+                                                       fetch a text or HTML URL into raw/
   kforge source import [path] --dir <local-dir> [--title-prefix <text>] [--dry-run] [--json]
                                                        copy a local source directory into raw/
   kforge source list [path]                            list raw sources and metadata
@@ -1180,4 +1201,11 @@ function isReviewStatus(value: string): value is ReviewStatus {
   return value === "proposed" || value === "accepted" || value === "rejected" || value === "applied";
 }
 
-process.exitCode = main();
+main()
+  .then((exitCode) => {
+    process.exitCode = exitCode;
+  })
+  .catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });

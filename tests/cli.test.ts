@@ -1,5 +1,7 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -32,6 +34,7 @@ test("cli help exposes the public command surface", async () => {
   assert.match(result.stdout, /kforge compile review \[path\] \[--limit <n>\] \[--dry-run\] \[--json\]/);
   assert.match(result.stdout, /kforge compile draft \[path\] .* \[--json\]/);
   assert.match(result.stdout, /kforge source add \[path\] --file <local-file> .* \[--json\]/);
+  assert.match(result.stdout, /kforge source fetch \[path\] --url <url> .* \[--json\]/);
   assert.match(result.stdout, /kforge source import \[path\] --dir <local-dir> .* \[--json\]/);
   assert.match(result.stdout, /kforge compile draft \[path\]/);
   assert.match(result.stdout, /kforge review queue \[path\]/);
@@ -410,6 +413,42 @@ test("cli adds a source as JSON", async () => {
   } finally {
     await rm(repoPath, { recursive: true, force: true });
     await rm(sourceDir, { recursive: true, force: true });
+  }
+});
+
+test("cli fetches a URL source as JSON", async () => {
+  const repoPath = await mkdtemp(path.join(tmpdir(), "kforge-cli-source-fetch-"));
+  const server = await startHttpServer({
+    "/note": {
+      contentType: "text/html; charset=utf-8",
+      body: "<html><head><title>CLI Web Note</title></head><body><h1>CLI Web Note</h1><p>Fetched evidence.</p></body></html>",
+    },
+  });
+  try {
+    await runCli(["init", repoPath]);
+
+    const result = await runCli(["source", "fetch", repoPath, "--url", `${server.url}/note`, "--json"]);
+    const payload = JSON.parse(result.stdout) as {
+      ok?: boolean;
+      action?: string;
+      source?: string;
+      metadata?: string;
+      status?: number;
+      next?: string[];
+    };
+
+    assert.equal(result.exitCode, 0);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.action, "fetched");
+    assert.equal(payload.source, "raw/cli-web-note.md");
+    assert.equal(payload.metadata, "raw/_meta/cli-web-note.md");
+    assert.equal(payload.status, 200);
+    assert.match(payload.next?.join("\n") ?? "", /kforge source inspect/);
+    assert.match(await readFile(path.join(repoPath, "raw", "cli-web-note.md"), "utf8"), /# CLI Web Note/);
+    assert.match(await readFile(path.join(repoPath, "raw", "_meta", "cli-web-note.md"), "utf8"), /Fetched from URL/);
+  } finally {
+    await server.close();
+    await rm(repoPath, { recursive: true, force: true });
   }
 });
 
@@ -936,6 +975,42 @@ async function runCli(args: string[]): Promise<{ exitCode: number; stdout: strin
       stderr: failed.stderr ?? "",
     };
   }
+}
+
+async function startHttpServer(
+  routes: Record<string, { body: string; contentType: string }>,
+): Promise<{ url: string; close: () => Promise<void> }> {
+  const server = http.createServer((request, response) => {
+    const route = routes[request.url ?? "/"];
+    if (!route) {
+      response.writeHead(404, { "content-type": "text/plain" });
+      response.end("not found");
+      return;
+    }
+    response.writeHead(200, { "content-type": route.contentType });
+    response.end(route.body);
+  });
+
+  await new Promise<void>((resolve) => {
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  assert.equal(typeof address, "object");
+  assert.notEqual(address, null);
+  const port = (address as AddressInfo).port;
+  return {
+    url: `http://127.0.0.1:${port}`,
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      }),
+  };
 }
 
 function today(): string {

@@ -1,4 +1,6 @@
 import { mkdtemp, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -26,6 +28,7 @@ import {
   dashboardRepo,
   demoRepo,
   doctorRepo,
+  fetchSource,
   finishRun,
   graphRepo,
   handoffRepo,
@@ -82,6 +85,7 @@ import {
   type RunNextPayload,
   type RunStartPayload,
   type SourceImportPayload,
+  type SourceFetchPayload,
   type TaskClaimPayload,
   type TaskDonePayload,
   type TaskListPayload,
@@ -462,6 +466,36 @@ test("importSources refuses repo roots and canonical directories", async () => {
     assert.equal(rawResult.ok, false);
     assert.match(rawResult.messages.join("\n"), /canonical directory/);
   } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test("fetchSource imports a URL as markdown with metadata", async () => {
+  const repoPath = await tempRepoPath();
+  const server = await startHttpServer({
+    "/article": {
+      contentType: "text/html; charset=utf-8",
+      body: "<html><head><title>Fetched Article</title></head><body><h1>Fetched Article</h1><p>Evidence with <a href=\"/source\">a link</a>.</p></body></html>",
+    },
+  });
+  try {
+    initRepo(repoPath);
+
+    const result = await fetchSource(repoPath, { url: `${server.url}/article`, title: "Fetched Article", json: true });
+    const payload = JSON.parse(result.messages[0]) as SourceFetchPayload;
+
+    assert.equal(result.ok, true);
+    assert.equal(payload.action, "fetched");
+    assert.equal(payload.source, "raw/fetched-article.md");
+    assert.equal(payload.metadata, "raw/_meta/fetched-article.md");
+    assert.equal(payload.status, 200);
+    assert.match(payload.contentType, /text\/html/);
+    assert.match(payload.next.join("\n"), /kforge source inspect/);
+    assert.match(await readFile(path.join(repoPath, "raw", "fetched-article.md"), "utf8"), /# Fetched Article/);
+    assert.match(await readFile(path.join(repoPath, "raw", "fetched-article.md"), "utf8"), /\[a link\]\(http:\/\/127\.0\.0\.1:/);
+    assert.match(await readFile(path.join(repoPath, "raw", "_meta", "fetched-article.md"), "utf8"), /URL: http:\/\/127\.0\.0\.1:/);
+  } finally {
+    await server.close();
     await rm(repoPath, { recursive: true, force: true });
   }
 });
@@ -2739,6 +2773,42 @@ async function assertFileExists(target: string): Promise<void> {
 
 async function assertFileMissing(target: string): Promise<void> {
   await assert.rejects(import("node:fs/promises").then((fs) => fs.stat(target)), { code: "ENOENT" });
+}
+
+async function startHttpServer(
+  routes: Record<string, { body: string; contentType: string }>,
+): Promise<{ url: string; close: () => Promise<void> }> {
+  const server = http.createServer((request, response) => {
+    const route = routes[request.url ?? "/"];
+    if (!route) {
+      response.writeHead(404, { "content-type": "text/plain" });
+      response.end("not found");
+      return;
+    }
+    response.writeHead(200, { "content-type": route.contentType });
+    response.end(route.body);
+  });
+
+  await new Promise<void>((resolve) => {
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  assert.equal(typeof address, "object");
+  assert.notEqual(address, null);
+  const port = (address as AddressInfo).port;
+  return {
+    url: `http://127.0.0.1:${port}`,
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      }),
+  };
 }
 
 function today(): string {

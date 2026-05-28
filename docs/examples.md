@@ -226,6 +226,14 @@ kforge source add ./my-topic \
   --url "https://example.com/article"
 ```
 
+Or fetch a text or HTML web source directly:
+
+```bash
+kforge source fetch ./my-topic \
+  --url "https://example.com/article" \
+  --title "Important Article"
+```
+
 Or import a whole local research folder:
 
 ```bash
@@ -240,7 +248,8 @@ kforge source import ./my-topic \
 ```
 
 For automation, append `--json` to source ingest commands to capture the raw
-source refs and metadata refs for the next tool call.
+source refs, metadata refs, and fetched response metadata for the next tool
+call.
 
 Index and inspect the source:
 

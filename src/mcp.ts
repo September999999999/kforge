@@ -31,6 +31,7 @@ import {
   dashboardRepo,
   demoRepo,
   doctorRepo,
+  fetchSource,
   finishRun,
   graphRepo,
   handoffRepo,
@@ -208,6 +209,36 @@ export function createKforgeMcpServer(options: McpOptions = {}): McpServer {
           license,
           note,
           dryRun,
+          json,
+        }),
+      ),
+  );
+
+  server.registerTool(
+    "kforge_source_fetch",
+    {
+      title: "Fetch URL source",
+      description: "Fetch a text or HTML URL into raw/ and create a source metadata sidecar.",
+      inputSchema: z.object({
+        path: repoPathSchema,
+        url: z.string().min(1),
+        title: z.string().optional(),
+        author: z.string().optional(),
+        date: z.string().optional(),
+        license: z.string().optional(),
+        note: z.string().optional(),
+        json: z.boolean().optional(),
+      }),
+    },
+    async ({ path: repoPath, url, title, author, date, license, note, json }) =>
+      runAsTool(() =>
+        fetchSource(toolRepoPath(defaultRepoPath, repoPath), {
+          url,
+          title,
+          author,
+          date,
+          license,
+          note,
           json,
         }),
       ),
@@ -1157,9 +1188,9 @@ used as the default path when tool calls omit their own path argument.
   await server.connect(transport);
 }
 
-function runAsTool(action: () => CommandResult): ToolTextResult {
+async function runAsTool(action: () => CommandResult | Promise<CommandResult>): Promise<ToolTextResult> {
   try {
-    return commandResultToTool(action());
+    return commandResultToTool(await action());
   } catch (error) {
     return {
       content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],

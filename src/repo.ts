@@ -1,5 +1,6 @@
 import fs, { constants, type Dirent, type Stats } from "node:fs";
 import path from "node:path";
+import { VERSION } from "./version.js";
 
 export const CANONICAL_DIRS = ["raw", "wiki", "claims", "indexes", "outputs", "reviews", "tasks", "runs"] as const;
 
@@ -63,6 +64,16 @@ export interface AddSourceOptions {
   json?: boolean;
 }
 
+export interface FetchSourceOptions {
+  url: string;
+  title?: string;
+  author?: string;
+  date?: string;
+  license?: string;
+  note?: string;
+  json?: boolean;
+}
+
 export interface ImportSourcesOptions {
   dir: string;
   titlePrefix?: string;
@@ -89,6 +100,20 @@ export interface SourceAddPayload {
   source: string;
   metadata: string;
   originalPath: string;
+  next: string[];
+}
+
+export interface SourceFetchPayload {
+  ok: true;
+  updatedAt: string;
+  action: "fetched";
+  title: string;
+  url: string;
+  source: string;
+  metadata: string;
+  status: number;
+  contentType: string;
+  bytes: number;
   next: string[];
 }
 
@@ -972,6 +997,38 @@ export function addSource(repoPath: string, options: AddSourceOptions): CommandR
       `Added ${copied.rawRef}`,
       `Wrote ${copied.metadataRef}`,
       "Next: run `kforge index`, then compile from the new raw source.",
+    ],
+  };
+}
+
+export async function fetchSource(repoPath: string, options: FetchSourceOptions): Promise<CommandResult> {
+  requireRepo(repoPath);
+
+  const url = normalizeFetchUrl(options.url);
+  if (!url) {
+    return { ok: false, messages: ["source fetch requires an http or https URL"] };
+  }
+
+  const fetched = await fetchUrlSource(url);
+  if (!fetched.ok) {
+    return { ok: false, messages: fetched.messages };
+  }
+
+  const imported = importFetchedSource(repoPath, url, fetched, options);
+  if (options.json) {
+    return {
+      ok: true,
+      messages: [JSON.stringify(sourceFetchPayload(url, imported, fetched, options), null, 2)],
+    };
+  }
+
+  return {
+    ok: true,
+    messages: [
+      `Fetched ${url}`,
+      `Added ${imported.rawRef}`,
+      `Wrote ${imported.metadataRef}`,
+      "Next: run `kforge refresh`, then inspect or compile from the fetched source.",
     ],
   };
 }
@@ -7287,6 +7344,15 @@ type CopiedSource = {
   metadataRef: string;
 };
 
+type FetchedSource = {
+  ok: true;
+  status: number;
+  contentType: string;
+  body: string;
+  bytes: number;
+  finalUrl: string;
+};
+
 type SourceImportPlanItem = {
   sourcePath: string;
   relativePath: string;
@@ -7304,6 +7370,30 @@ function sourceAddPayload(sourcePath: string, copied: CopiedSource, options: Add
     source: copied.rawRef,
     metadata: copied.metadataRef,
     originalPath: sourcePath,
+    next: [
+      "kforge compile plan . --json",
+      `kforge source inspect . --file ${copied.rawRef}`,
+    ],
+  };
+}
+
+function sourceFetchPayload(
+  url: string,
+  copied: CopiedSource,
+  fetched: FetchedSource,
+  options: FetchSourceOptions,
+): SourceFetchPayload {
+  return {
+    ok: true,
+    updatedAt: today(),
+    action: "fetched",
+    title: sourceFetchTitle(url, fetched, options),
+    url,
+    source: copied.rawRef,
+    metadata: copied.metadataRef,
+    status: fetched.status,
+    contentType: fetched.contentType,
+    bytes: fetched.bytes,
     next: [
       "kforge compile plan . --json",
       `kforge source inspect . --file ${copied.rawRef}`,
@@ -7365,6 +7455,187 @@ function copySourceIntoRaw(repoPath: string, sourcePath: string, options: CopySo
     rawRef: toRepoPath(repoPath, target),
     metadataRef: toRepoPath(repoPath, metadataPath),
   };
+}
+
+async function fetchUrlSource(url: string): Promise<FetchedSource | { ok: false; messages: string[] }> {
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        accept: "text/html, text/markdown, text/plain;q=0.9, */*;q=0.1",
+        "user-agent": `kforge/${VERSION}`,
+      },
+      redirect: "follow",
+    });
+  } catch (error) {
+    return { ok: false, messages: [`source fetch failed: ${error instanceof Error ? error.message : String(error)}`] };
+  }
+
+  if (!response.ok) {
+    return { ok: false, messages: [`source fetch failed with HTTP ${response.status}: ${url}`] };
+  }
+
+  const contentType = response.headers.get("content-type") ?? "application/octet-stream";
+  if (!isTextFetchContentType(contentType)) {
+    return { ok: false, messages: [`source fetch only supports text-like responses, got: ${contentType}`] };
+  }
+
+  const rawBody = await response.text();
+  const body = fetchedBodyToMarkdown(rawBody, contentType, response.url || url);
+  return {
+    ok: true,
+    status: response.status,
+    contentType,
+    body,
+    bytes: Buffer.byteLength(body, "utf8"),
+    finalUrl: response.url || url,
+  };
+}
+
+function importFetchedSource(
+  repoPath: string,
+  url: string,
+  fetched: FetchedSource,
+  options: FetchSourceOptions,
+): CopiedSource {
+  const title = sourceFetchTitle(url, fetched, options);
+  const target = nextAvailableRawPath(repoPath, slugify(title) || "web-source", ".md");
+  mkdirSyncish(path.dirname(target));
+  writeFileSyncish(target, fetched.body);
+
+  const metadataPath = nextAvailableRawMetadataPath(repoPath, target);
+  mkdirSyncish(path.dirname(metadataPath));
+  writeFileSyncish(
+    metadataPath,
+    sourceMetadata(toRepoPath(repoPath, target), fetched.finalUrl, title, {
+      title,
+      url,
+      author: options.author,
+      date: options.date,
+      license: options.license,
+      note: sourceFetchNote(fetched, options.note),
+    }),
+  );
+
+  return {
+    rawRef: toRepoPath(repoPath, target),
+    metadataRef: toRepoPath(repoPath, metadataPath),
+  };
+}
+
+function normalizeFetchUrl(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return undefined;
+    }
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function isTextFetchContentType(contentType: string): boolean {
+  const normalized = contentType.toLowerCase();
+  return (
+    normalized.startsWith("text/") ||
+    normalized.includes("application/json") ||
+    normalized.includes("application/xml") ||
+    normalized.includes("application/xhtml+xml")
+  );
+}
+
+function sourceFetchTitle(url: string, fetched: FetchedSource, options: FetchSourceOptions): string {
+  const explicit = options.title?.trim();
+  if (explicit) {
+    return explicit;
+  }
+
+  const heading = fetched.body.match(/^#\s+(.+?)\s*$/m)?.[1]?.trim();
+  if (heading) {
+    return heading;
+  }
+
+  try {
+    const parsed = new URL(url);
+    const pathname = parsed.pathname.replace(/\/$/, "");
+    const lastSegment = decodeURIComponent(pathname.split("/").filter(Boolean).pop() ?? parsed.hostname);
+    return sourceFallbackTitle(lastSegment || parsed.hostname);
+  } catch {
+    return "Web Source";
+  }
+}
+
+function sourceFetchNote(fetched: FetchedSource, note: string | undefined): string {
+  const lines = [
+    `Fetched from URL with HTTP status ${fetched.status}.`,
+    `Content-Type: ${fetched.contentType}`,
+    `Final URL: ${fetched.finalUrl}`,
+  ];
+  const normalizedNote = note?.trim();
+  if (normalizedNote) {
+    lines.push("", normalizedNote);
+  }
+  return lines.join("\n");
+}
+
+function fetchedBodyToMarkdown(body: string, contentType: string, url: string): string {
+  if (contentType.toLowerCase().includes("html")) {
+    return htmlToMarkdownish(body, url);
+  }
+
+  return body;
+}
+
+function htmlToMarkdownish(html: string, url: string): string {
+  const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim();
+  let text = html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<\/(h1)>/gi, "\n\n")
+    .replace(/<h1\b[^>]*>/gi, "\n# ")
+    .replace(/<\/(h2)>/gi, "\n\n")
+    .replace(/<h2\b[^>]*>/gi, "\n## ")
+    .replace(/<\/(h3)>/gi, "\n\n")
+    .replace(/<h3\b[^>]*>/gi, "\n### ")
+    .replace(/<\/(p|div|section|article|header|footer|main|li|ul|ol|blockquote)>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_match, href: string, label: string) => {
+      const cleanLabel = decodeHtmlEntities(stripHtmlTags(label)).trim();
+      if (!cleanLabel) {
+        return "";
+      }
+      return `[${cleanLabel}](${new URL(href, url).toString()})`;
+    })
+    .replace(/<[^>]+>/g, "");
+
+  text = decodeHtmlEntities(text)
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  const cleanTitle = title ? decodeHtmlEntities(stripHtmlTags(title)).trim() : "";
+  if (cleanTitle && !text.startsWith("# ")) {
+    return `# ${cleanTitle}\n\n${text}\n`;
+  }
+  return `${text}\n`;
+}
+
+function stripHtmlTags(value: string): string {
+  return value.replace(/<[^>]+>/g, "");
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_match, code: string) => String.fromCodePoint(Number.parseInt(code, 10)))
+    .replace(/&#x([0-9a-f]+);/gi, (_match, code: string) => String.fromCodePoint(Number.parseInt(code, 16)));
 }
 
 function importableSourceFiles(root: string): string[] {

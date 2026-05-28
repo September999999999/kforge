@@ -1,4 +1,6 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -11,6 +13,12 @@ test("mcp server exposes kforge tools over stdio", async () => {
   const repoPath = await mkdtemp(path.join(tmpdir(), "kforge-mcp-test-"));
   const mcpDemoRepo = path.join(path.dirname(repoPath), "kforge-mcp-demo");
   const sourcePath = path.join(await mkdtemp(path.join(tmpdir(), "kforge-mcp-source-")), "source.md");
+  const webServer = await startHttpServer({
+    "/mcp-note": {
+      contentType: "text/html; charset=utf-8",
+      body: "<html><head><title>MCP Web Note</title></head><body><h1>MCP Web Note</h1><p>Fetched by MCP.</p></body></html>",
+    },
+  });
   const client = new Client({ name: "kforge-test-client", version: "1.0.0" });
   const transport = new StdioClientTransport({
     command: process.execPath,
@@ -27,6 +35,7 @@ test("mcp server exposes kforge tools over stdio", async () => {
     const tools = await client.listTools();
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_demo"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_add"), true);
+    assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_fetch"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_import"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_refresh"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_list"), true);
@@ -133,6 +142,27 @@ test("mcp server exposes kforge tools over stdio", async () => {
     assert.equal(sourceJsonPayload.source, "raw/mcp-json-source.md");
     assert.equal(sourceJsonPayload.metadata, "raw/_meta/mcp-json-source.md");
     assert.match(sourceJsonPayload.next?.join("\n") ?? "", /kforge compile plan/);
+
+    const sourceFetch = await client.callTool({
+      name: "kforge_source_fetch",
+      arguments: {
+        url: `${webServer.url}/mcp-note`,
+        json: true,
+      },
+    });
+    const sourceFetchPayload = JSON.parse(firstText(sourceFetch.content)) as {
+      action?: string;
+      source?: string;
+      metadata?: string;
+      status?: number;
+      next?: string[];
+    };
+    assert.equal(sourceFetchPayload.action, "fetched");
+    assert.equal(sourceFetchPayload.source, "raw/mcp-web-note.md");
+    assert.equal(sourceFetchPayload.metadata, "raw/_meta/mcp-web-note.md");
+    assert.equal(sourceFetchPayload.status, 200);
+    assert.match(sourceFetchPayload.next?.join("\n") ?? "", /kforge source inspect/);
+    assert.match(await readFile(path.join(repoPath, "raw", "mcp-web-note.md"), "utf8"), /# MCP Web Note/);
 
     const sourceList = await client.callTool({ name: "kforge_source_list", arguments: {} });
     assert.match(firstText(sourceList.content), /raw\/mcp-source.md/);
@@ -854,6 +884,7 @@ test("mcp server exposes kforge tools over stdio", async () => {
     await rm(repoPath, { recursive: true, force: true });
     await rm(mcpDemoRepo, { recursive: true, force: true });
     await rm(path.dirname(sourcePath), { recursive: true, force: true });
+    await webServer.close();
   }
 });
 
@@ -863,6 +894,42 @@ function firstText(content: unknown): string {
   }
   const first = content[0] as { type?: string; text?: string } | undefined;
   return first?.type === "text" ? first.text ?? "" : "";
+}
+
+async function startHttpServer(
+  routes: Record<string, { body: string; contentType: string }>,
+): Promise<{ url: string; close: () => Promise<void> }> {
+  const server = http.createServer((request, response) => {
+    const route = routes[request.url ?? "/"];
+    if (!route) {
+      response.writeHead(404, { "content-type": "text/plain" });
+      response.end("not found");
+      return;
+    }
+    response.writeHead(200, { "content-type": route.contentType });
+    response.end(route.body);
+  });
+
+  await new Promise<void>((resolve) => {
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  assert.equal(typeof address, "object");
+  assert.notEqual(address, null);
+  const port = (address as AddressInfo).port;
+  return {
+    url: `http://127.0.0.1:${port}`,
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      }),
+  };
 }
 
 function today(): string {

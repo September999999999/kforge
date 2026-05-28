@@ -25,17 +25,24 @@ metadata sidecar records title, original path, URL, author, date, license, and
 notes when provided. Sidecar names stay distinct when raw sources share a base
 name across extensions, such as `article.md` and `article.txt`.
 
+`kforge source fetch` fetches an explicit `http` or `https` URL into `raw/` and
+writes the same metadata sidecar. Text responses are stored as-is. HTML
+responses are converted into simple Markdown-like text with headings and links
+preserved for source inspection. This is an opt-in network ingest command; the
+repo protocol does not require network access.
+
 `kforge source import` copies files from a local directory into `raw/` and
 writes the same metadata sidecars. It recursively imports normal files, skips
 hidden paths, symlinks, and common generated directories, and refuses to import
 the repo root or a kforge canonical directory. Use `--dry-run` to preview the
 import plan.
 
-Both ingest commands accept `--json` for agent and script handoff. `source add
+Ingest commands accept `--json` for agent and script handoff. `source add
 --json` returns the created `source`, `metadata`, original path, and suggested
-next commands. `source import --json` returns `dryRun`, `counts`, and one item
-per candidate with source and metadata refs; `--dry-run --json` reports
-`would_import` items without copying files.
+next commands. `source fetch --json` returns the fetched URL, status,
+content-type, created refs, and next commands. `source import --json` returns
+`dryRun`, `counts`, and one item per candidate with source and metadata refs;
+`--dry-run --json` reports `would_import` items without copying files.
 
 Examples:
 
@@ -43,6 +50,8 @@ Examples:
 kforge source add . --file ~/Downloads/article.md --title "Article"
 kforge source add . --file ~/Downloads/article.md --url "https://example.com/article"
 kforge source add . --file ~/Downloads/article.md --json
+kforge source fetch . --url "https://example.com/article" --title "Article"
+kforge source fetch . --url "https://example.com/article" --json
 kforge source import . --dir ~/Downloads/research-folder --title-prefix "Project A" --dry-run
 kforge source import . --dir ~/Downloads/research-folder --title-prefix "Project A" --dry-run --json
 kforge source import . --dir ~/Downloads/research-folder --title-prefix "Project A"
@@ -787,7 +796,7 @@ agent handoff. With `--json`, stdout becomes a machine-readable object with
 
 ## Compilation Lifecycle
 
-1. **Ingest**: put source material into `raw/` with `kforge source add`, `kforge source import`, or a manual copy.
+1. **Ingest**: put source material into `raw/` with `kforge source add`, `kforge source fetch`, `kforge source import`, or a manual copy.
 2. **Inventory**: update `indexes/source-inventory.md`.
 3. **Plan**: run `kforge compile plan` to route uncovered raw sources.
 4. **Stage Reviews**: run `kforge compile review` to queue proposed compile work.

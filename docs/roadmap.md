@@ -7,6 +7,7 @@ tools to share.
 
 - `kforge init`
 - `kforge source add`
+- `kforge source fetch`
 - `kforge source import`
 - source ingest JSON output for agent automation
 - `kforge source list`

@@ -13,6 +13,7 @@ import {
   agentBoard,
   agentDraft,
   agentFinish,
+  agentLaunch,
   agentPlan,
   agentStatus,
   agentStep,
@@ -506,6 +507,27 @@ export function createKforgeMcpServer(options: McpOptions = {}): McpServer {
     },
     async ({ path: repoPath, agents, seed, limit, note, json }) =>
       runAsTool(() => agentPlan(toolRepoPath(defaultRepoPath, repoPath), { agents, seed, limit, note, json })),
+  );
+
+  server.registerTool(
+    "kforge_agent_launch",
+    {
+      title: "Launch parallel agent workers",
+      description: "Generate, write, or execute a shell launcher for multiple agent workers from planned or existing runs.",
+      inputSchema: z.object({
+        path: repoPathSchema,
+        agents: z.array(z.string().min(1)).min(1),
+        command: z.string().optional(),
+        limit: z.number().int().positive().optional(),
+        note: z.string().optional(),
+        noPlan: z.boolean().optional(),
+        write: z.boolean().optional(),
+        exec: z.boolean().optional(),
+        json: z.boolean().optional(),
+      }),
+    },
+    async ({ path: repoPath, agents, command, limit, note, noPlan, write, exec, json }) =>
+      runAsTool(() => agentLaunch(toolRepoPath(defaultRepoPath, repoPath), { agents, command, limit, note, noPlan, write, exec, json })),
   );
 
   server.registerTool(

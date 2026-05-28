@@ -542,6 +542,7 @@ kforge agent step . --agent agent-a --json
 kforge agent draft . --agent agent-a --json
 kforge agent status . --agent agent-a --json
 kforge agent board . --json
+kforge agent launch . --agent agent-a --agent agent-b --command 'codex exec --prompt {prompt}' --write --json
 kforge agent finish . --agent agent-a --status success --task-done --json
 kforge agent list
 kforge agent print --template claude
@@ -559,6 +560,12 @@ commands.
 `agent board` shows shared multi-agent state: active agents, open tasks,
 running runs, claimed tasks without runs, and running runs whose task is no
 longer claimed.
+`agent launch` generates a provider-neutral shell launcher for several worker
+processes. By default it plans fresh runs first; with `--no-plan`, it reuses
+existing running assignments for the named agents. Command templates can use
+`{agent}`, `{task}`, `{run}`, `{prompt}`, `{log}`, and `{repo}` placeholders.
+With `--write`, the launcher is saved under `runs/`; with `--exec`, it is saved
+and run immediately.
 `agent finish` closes the current run for an agent and can mark the linked task
 done with `--task-done`.
 `run next` remains available as the lower-level task/run command.

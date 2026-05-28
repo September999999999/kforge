@@ -339,6 +339,23 @@ for each assigned agent, starts one run per assignment, and returns the focused
 `agent step` command each worker should run next. Agents that could not be
 assigned are listed under `unassignedAgents`.
 
+Generate a provider-neutral shell launcher for the planned workers:
+
+```bash
+kforge agent launch ./my-topic \
+  --agent agent-a \
+  --agent agent-b \
+  --agent agent-c \
+  --command 'codex exec --prompt {prompt}' \
+  --write \
+  --json
+```
+
+`agent launch` can plan runs itself, or use `--no-plan` to reuse existing
+running assignments. The command template supports `{agent}`, `{task}`, `{run}`,
+`{prompt}`, `{log}`, and `{repo}`. Add `--exec` when the local worker command is
+ready and you want the launcher to run immediately.
+
 Inspect the shared board while agents are working:
 
 ```bash

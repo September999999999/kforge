@@ -56,6 +56,7 @@ test("mcp server exposes kforge tools over stdio", async () => {
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_status"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_board"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_plan"), true);
+    assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_launch"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_finish"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_compile"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_compile_plan"), true);
@@ -438,6 +439,26 @@ test("mcp server exposes kforge tools over stdio", async () => {
     assert.notEqual(agentPlanPayload.assignments?.[0]?.task?.file, agentPlanPayload.assignments?.[1]?.task?.file);
     assert.match(agentPlanPayload.assignments?.[0]?.commands?.join("\n") ?? "", /kforge agent draft/);
     assert.match(await readFile(path.join(repoPath, agentPlanPayload.assignments?.[0]?.run?.file ?? ""), "utf8"), /parallel plan/);
+
+    const agentLaunchResult = await client.callTool({
+      name: "kforge_agent_launch",
+      arguments: {
+        agents: ["mcp-plan-a", "mcp-plan-b"],
+        noPlan: true,
+        command: "printf {agent}:{run}",
+        json: true,
+      },
+    });
+    const agentLaunchPayload = JSON.parse(firstText(agentLaunchResult.content)) as {
+      source?: string;
+      items?: Array<{ agent?: string; command?: string; log?: string }>;
+      script?: { content?: string };
+    };
+    assert.equal(agentLaunchPayload.source, "existing");
+    assert.equal(agentLaunchPayload.items?.length, 2);
+    assert.match(agentLaunchPayload.items?.[0]?.command ?? "", /printf mcp-plan-a:runs\//);
+    assert.match(agentLaunchPayload.items?.[0]?.log ?? "", /^runs\/.+launch-mcp-plan-a.*\.log$/);
+    assert.match(agentLaunchPayload.script?.content ?? "", /pids=\(\)/);
 
     const agentBoardResult = await client.callTool({
       name: "kforge_agent_board",

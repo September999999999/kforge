@@ -10,6 +10,7 @@ import {
   agentBoard,
   agentDraft,
   agentFinish,
+  agentLaunch,
   agentPlan,
   agentStatus,
   agentStep,
@@ -68,6 +69,7 @@ import {
   type AgentBoardPayload,
   type AgentDraftPayload,
   type AgentFinishPayload,
+  type AgentLaunchPayload,
   type AgentPlanPayload,
   type AgentStatusPayload,
   type AgentStepPayload,
@@ -1295,6 +1297,65 @@ test("agent plan assigns independent runs for multiple agents", async () => {
     ) as AgentPlanPayload;
     assert.equal(secondPlan.started, 0);
     assert.deepEqual(secondPlan.unassignedAgents, ["agent-c"]);
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test("agent launch prepares a parallel worker script", async () => {
+  const repoPath = await tempRepoPath();
+  try {
+    initRepo(repoPath);
+    await writeFile(path.join(repoPath, "raw", "source.md"), "# Source\n", "utf8");
+    createReview(repoPath, {
+      title: "Launch One",
+      targets: ["wiki/Launch One.md"],
+      sources: ["raw/source.md"],
+      kind: "compile",
+    });
+    createReview(repoPath, {
+      title: "Launch Two",
+      targets: ["wiki/Launch Two.md"],
+      sources: ["raw/source.md"],
+      kind: "compile",
+    });
+
+    const payload = JSON.parse(
+      agentLaunch(repoPath, {
+        agents: ["launch-a", "launch-b"],
+        command: "printf {agent}-{run}",
+        note: "parallel launch",
+        write: true,
+        json: true,
+      }).messages[0],
+    ) as AgentLaunchPayload;
+
+    assert.equal(payload.ok, true);
+    assert.equal(payload.source, "planned");
+    assert.equal(payload.items.length, 2);
+    assert.equal(payload.written, true);
+    assert.match(payload.script.file ?? "", /^runs\/.+agent-launch.*\.sh$/);
+    assert.match(payload.script.content, /pids=\(\)/);
+    assert.match(payload.items[0]?.command ?? "", /^printf launch-a-runs\//);
+    assert.match(payload.items[0]?.prompt ?? "", /kforge agent step/);
+    assert.match(payload.items[0]?.log ?? "", /^runs\/.+launch-launch-a.*\.log$/);
+    assert.match(await readFile(path.join(repoPath, payload.script.file ?? ""), "utf8"), /kforge agent launch/);
+
+    const runs = JSON.parse(listRuns(repoPath, { status: "all", json: true }).messages[0]) as RunListPayload;
+    assert.equal(runs.total, 2);
+
+    const executed = JSON.parse(
+      agentLaunch(repoPath, {
+        agents: ["launch-a", "launch-b"],
+        command: "printf {agent}:{run}",
+        noPlan: true,
+        exec: true,
+        json: true,
+      }).messages[0],
+    ) as AgentLaunchPayload;
+    assert.equal(executed.executed, true);
+    assert.equal(executed.exitCode, 0);
+    assert.match(await readFile(path.join(repoPath, executed.items[0]?.log ?? ""), "utf8"), /launch-a:runs\//);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }

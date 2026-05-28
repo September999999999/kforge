@@ -1,4 +1,5 @@
 import fs, { constants, type Dirent, type Stats } from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { VERSION } from "./version.js";
 
@@ -568,6 +569,17 @@ export interface AgentPlanOptions {
   json?: boolean;
 }
 
+export interface AgentLaunchOptions {
+  agents: string[];
+  command?: string;
+  limit?: number;
+  note?: string;
+  noPlan?: boolean;
+  write?: boolean;
+  exec?: boolean;
+  json?: boolean;
+}
+
 export interface AgentPlanAssignment {
   agent: string;
   task: TaskItem;
@@ -586,6 +598,32 @@ export interface AgentPlanPayload {
   seeded: TaskSeedPayload;
   assignments: AgentPlanAssignment[];
   unassignedAgents: string[];
+  next: string[];
+}
+
+export interface AgentLaunchItem {
+  agent: string;
+  task: TaskItem;
+  run: RunItem;
+  prompt: string;
+  command: string;
+  log: string;
+}
+
+export interface AgentLaunchPayload {
+  ok: boolean;
+  updatedAt: string;
+  commandTemplate: string;
+  source: "planned" | "existing";
+  planned?: AgentPlanPayload;
+  items: AgentLaunchItem[];
+  script: {
+    file?: string;
+    content: string;
+  };
+  written: boolean;
+  executed: boolean;
+  exitCode?: number;
   next: string[];
 }
 
@@ -2668,6 +2706,73 @@ export function agentPlan(repoPath: string, options: AgentPlanOptions): CommandR
   ];
 
   return { ok: true, messages: [lines.join("\n")] };
+}
+
+export function agentLaunch(repoPath: string, options: AgentLaunchOptions): CommandResult {
+  requireRepo(repoPath);
+
+  const agents = [...new Set(options.agents.map((agent) => agent.trim()).filter(Boolean))];
+  if (agents.length === 0) {
+    return { ok: false, messages: ["agent launch requires at least one --agent"] };
+  }
+
+  const commandTemplate = options.command?.trim() || "kforge agent step . --agent {agent} --json";
+  if (!commandTemplate) {
+    return { ok: false, messages: ["agent launch command template cannot be empty"] };
+  }
+
+  let planned: AgentPlanPayload | undefined;
+  let source: AgentLaunchPayload["source"] = "existing";
+  if (!options.noPlan) {
+    const planResult = agentPlan(repoPath, {
+      agents,
+      limit: options.limit,
+      note: options.note,
+      json: true,
+    });
+    if (!planResult.ok) {
+      return planResult;
+    }
+    planned = JSON.parse(planResult.messages[0]) as AgentPlanPayload;
+    source = "planned";
+  }
+
+  const assignments = planned?.assignments ?? agents.flatMap((agent) => currentAgentLaunchAssignment(repoPath, agent));
+  const items = assignments.map((assignment) => agentLaunchItem(repoPath, assignment, commandTemplate));
+  const scriptContent = agentLaunchScript(repoPath, items);
+  let scriptFile: string | undefined;
+
+  if (options.write || options.exec) {
+    scriptFile = writeAgentLaunchScript(repoPath, scriptContent);
+  }
+
+  let executed = false;
+  let exitCode: number | undefined;
+  if (options.exec) {
+    if (!scriptFile) {
+      return { ok: false, messages: ["agent launch internal error: missing launch script"] };
+    }
+    const result = spawnSync("bash", [path.resolve(repoPath, scriptFile)], {
+      cwd: repoPath,
+      stdio: "inherit",
+    });
+    executed = true;
+    exitCode = result.status ?? 1;
+  }
+
+  const payload = agentLaunchPayload({
+    commandTemplate,
+    source,
+    planned,
+    items,
+    scriptContent,
+    scriptFile,
+    written: Boolean(scriptFile),
+    executed,
+    exitCode,
+  });
+
+  return agentLaunchResult(payload, options.json);
 }
 
 export function agentStep(repoPath: string, options: AgentStepOptions): CommandResult {
@@ -6331,6 +6436,7 @@ function appendTaskHistory(text: string, entry: string): string {
 
 function runItems(repoPath: string): RunItem[] {
   return iterFiles(path.join(repoPath, "runs"))
+    .filter((file) => path.extname(file).toLowerCase() === ".md")
     .map((file) => runItem(repoPath, file))
     .sort((left, right) => runStatusSort(left) - runStatusSort(right) || left.file.localeCompare(right.file));
 }
@@ -6389,6 +6495,226 @@ function parseRunStatus(value: string): RunStatus {
 
 function runStatusMatches(item: RunItem, status: RunStatusFilter): boolean {
   return status === "all" || item.status === status;
+}
+
+function currentAgentLaunchAssignment(repoPath: string, agent: string): AgentPlanAssignment[] {
+  const run = runItems(repoPath).find((item) => item.status === "running" && item.agent === agent);
+  if (!run) {
+    return [];
+  }
+
+  const task = readTaskItem(repoPath, run.task, "agent launch");
+  if (!task) {
+    return [];
+  }
+
+  return [
+    {
+      agent,
+      task,
+      run,
+      read: agentStepReadRefs(run, task),
+      commands: agentStepCommands(run, task),
+      finish: [`kforge agent finish . --agent ${shellQuote(agent)} --run ${shellQuote(run.file)} --status success --task-done --json`],
+      next: [`kforge agent step . --agent ${shellQuote(agent)} --json`, `kforge run inspect . --run ${shellQuote(run.file)} --json`],
+    },
+  ];
+}
+
+function agentLaunchItem(repoPath: string, assignment: AgentPlanAssignment, commandTemplate: string): AgentLaunchItem {
+  const prompt = agentLaunchPrompt(assignment);
+  const log = nextAvailableAgentLaunchLogPath(repoPath, assignment.agent);
+  const replacements: Record<string, string> = {
+    agent: assignment.agent,
+    task: assignment.task.file,
+    run: assignment.run.file,
+    prompt,
+    log,
+    repo: repoPath,
+  };
+
+  return {
+    agent: assignment.agent,
+    task: assignment.task,
+    run: assignment.run,
+    prompt,
+    command: expandAgentCommandTemplate(commandTemplate, replacements),
+    log,
+  };
+}
+
+function agentLaunchPrompt(assignment: AgentPlanAssignment): string {
+  return [
+    `You are ${assignment.agent}, working inside this kforge knowledge repo.`,
+    `Run: ${assignment.run.file}`,
+    `Task: ${assignment.task.file}`,
+    "",
+    "Start by reading this deterministic work packet:",
+    `kforge agent step . --agent ${shellQuote(assignment.agent)} --json`,
+    `kforge run inspect . --run ${shellQuote(assignment.run.file)} --json`,
+    "",
+    "Then draft, file review content, log progress, and finish the run when the review work is complete.",
+  ].join("\n");
+}
+
+function expandAgentCommandTemplate(template: string, replacements: Record<string, string>): string {
+  return template.replace(/\{(agent|task|run|prompt|log|repo)\}/g, (_match, key: string) => shellQuote(replacements[key] ?? ""));
+}
+
+function nextAvailableAgentLaunchLogPath(repoPath: string, agent: string): string {
+  const runsDir = path.join(repoPath, "runs");
+  mkdirSyncish(runsDir);
+
+  const base = slugify(`launch-${agent}`) || "launch";
+  let candidate = path.join(runsDir, `${today()}-${base}.log`);
+  let counter = 2;
+  while (exists(candidate)) {
+    candidate = path.join(runsDir, `${today()}-${base}-${counter}.log`);
+    counter += 1;
+  }
+  return toRepoPath(repoPath, candidate);
+}
+
+function writeAgentLaunchScript(repoPath: string, content: string): string {
+  const runsDir = path.join(repoPath, "runs");
+  mkdirSyncish(runsDir);
+
+  let candidate = path.join(runsDir, `${today()}-agent-launch.sh`);
+  let counter = 2;
+  while (exists(candidate)) {
+    candidate = path.join(runsDir, `${today()}-agent-launch-${counter}.sh`);
+    counter += 1;
+  }
+  writeFileSyncish(candidate, content);
+  fs.chmodSync(candidate, 0o755);
+  return toRepoPath(repoPath, candidate);
+}
+
+function agentLaunchScript(repoPath: string, items: AgentLaunchItem[]): string {
+  const lines = [
+    "#!/usr/bin/env bash",
+    "set -euo pipefail",
+    "",
+    `cd ${shellQuote(repoPath)}`,
+    "",
+    'echo "kforge agent launch: starting workers"',
+    "pids=()",
+  ];
+
+  for (const item of items) {
+    lines.push(
+      "",
+      `echo "starting ${shellEscapeDoubleQuoted(item.agent)} -> ${shellEscapeDoubleQuoted(item.run.file)}"`,
+      `(${item.command}) > ${shellQuote(item.log)} 2>&1 &`,
+      "pids+=(\"$!\")",
+    );
+  }
+
+  lines.push(
+    "",
+    "failed=0",
+    "for pid in \"${pids[@]}\"; do",
+    "  if ! wait \"$pid\"; then",
+    "    failed=1",
+    "  fi",
+    "done",
+    "",
+    "if [[ \"$failed\" -ne 0 ]]; then",
+    '  echo "kforge agent launch: one or more workers failed"',
+    "  exit 1",
+    "fi",
+    "",
+    'echo "kforge agent launch: all workers completed"',
+    "",
+  );
+
+  return `${lines.join("\n")}`;
+}
+
+function shellEscapeDoubleQuoted(value: string): string {
+  return value.replace(/["\\$`]/g, "\\$&");
+}
+
+function agentLaunchPayload(input: {
+  commandTemplate: string;
+  source: AgentLaunchPayload["source"];
+  planned?: AgentPlanPayload;
+  items: AgentLaunchItem[];
+  scriptContent: string;
+  scriptFile?: string;
+  written: boolean;
+  executed: boolean;
+  exitCode?: number;
+}): AgentLaunchPayload {
+  const ok = !input.executed || input.exitCode === 0;
+  return {
+    ok,
+    updatedAt: today(),
+    commandTemplate: input.commandTemplate,
+    source: input.source,
+    ...(input.planned ? { planned: input.planned } : {}),
+    items: input.items,
+    script: {
+      ...(input.scriptFile ? { file: input.scriptFile } : {}),
+      content: input.scriptContent,
+    },
+    written: input.written,
+    executed: input.executed,
+    ...(input.executed ? { exitCode: input.exitCode ?? 0 } : {}),
+    next: agentLaunchNext(input.items, input.scriptFile, input.executed),
+  };
+}
+
+function agentLaunchNext(items: AgentLaunchItem[], scriptFile: string | undefined, executed: boolean): string[] {
+  if (executed) {
+    return ["kforge agent board . --json", "kforge run list . --status all --json"];
+  }
+  if (scriptFile) {
+    return [`bash ${shellQuote(scriptFile)}`, "kforge agent board . --json"];
+  }
+  if (items.length > 0) {
+    return ["kforge agent launch . --agent <agent-a> --agent <agent-b> --write", "kforge agent board . --json"];
+  }
+  return ["kforge review queue . --json", "kforge task seed . --json"];
+}
+
+function agentLaunchResult(payload: AgentLaunchPayload, json: boolean | undefined): CommandResult {
+  if (json) {
+    return { ok: payload.ok, messages: [JSON.stringify(payload, null, 2)] };
+  }
+
+  const lines = [
+    "# Agent Launch",
+    "",
+    `Updated: ${payload.updatedAt}`,
+    `Source: ${payload.source}`,
+    `Workers: ${payload.items.length}`,
+    `Written: ${payload.written ? payload.script.file : "no"}`,
+    `Executed: ${payload.executed ? "yes" : "no"}`,
+    ...(payload.executed ? [`Exit code: ${payload.exitCode ?? 0}`] : []),
+    "",
+    "## Workers",
+    "",
+    ...(payload.items.length > 0
+      ? [
+          "| Agent | Task | Run | Log |",
+          "| --- | --- | --- | --- |",
+          ...payload.items.map((item) => `| ${escapeTableCell(item.agent)} | \`${item.task.file}\` | \`${item.run.file}\` | \`${item.log}\` |`),
+        ]
+      : ["No workers were prepared."]),
+    "",
+    "## Script",
+    "",
+    ...(payload.script.file ? [`- file: \`${payload.script.file}\``, ""] : []),
+    fencedBlock("bash", payload.script.content.trimEnd()),
+    "",
+    "## Next",
+    "",
+    ...payload.next.map((command) => `- \`${command}\``),
+    "",
+  ];
+
+  return { ok: payload.ok, messages: [lines.join("\n")] };
 }
 
 function agentStatusNext(agent: string, runningRuns: RunItem[], claimedTasks: TaskItem[]): string[] {

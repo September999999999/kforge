@@ -67,6 +67,8 @@ accepts a `path` argument when an agent needs to operate on a different repo.
   open tasks, and coordination gaps
 - `kforge_agent_plan`: assign independent review-backed tasks and start
   auditable runs for multiple agents in one deterministic pass
+- `kforge_agent_launch`: generate, write, or execute a provider-neutral shell
+  launcher for multiple planned or existing agent runs
 - `kforge_agent_finish`: finish one agent's current run and optionally mark the
   linked task done
 - `kforge_graph`: read or write the wiki backlinks and orphan report

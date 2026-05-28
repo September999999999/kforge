@@ -107,6 +107,8 @@ shell scripts can all understand.
   refreshed indexes, and optional agent runs
 - seed and claim review work as tasks so multiple agents can coordinate
 - pre-plan independent runs for several agents from the same review queue
+- generate or execute a shell launcher that starts several agent workers in
+  parallel from those planned runs
 - inspect a shared agent board for active runs, claimed tasks, and gaps
 - record auditable agent runs with logs and success/failure status
 - run deterministic health checks and trust score reports
@@ -148,6 +150,8 @@ tools that do not require an LLM provider:
 - generate agent task packs for LLM handoff
 - expose repo operations through a stdio MCP server
 - plan multiple independent agent runs from one review queue
+- generate a parallel agent launch script, or execute it when a worker command
+  template is configured
 - inspect multi-agent board state and coordination gaps
 - run structural health checks for links and local source references
 - validate the `kb.yaml` protocol manifest
@@ -372,6 +376,23 @@ kforge agent plan ~/research/my-topic \
 This sequentially claims different open tasks, starts one auditable run per
 assigned agent, and prints the `agent step` command each worker should run next.
 
+Generate a parallel launcher for those workers:
+
+```bash
+kforge agent launch ~/research/my-topic \
+  --agent agent-a \
+  --agent agent-b \
+  --agent agent-c \
+  --command 'codex exec --prompt {prompt}' \
+  --write \
+  --json
+```
+
+The launcher is a provider-neutral shell script under `runs/`. It substitutes
+`{agent}`, `{task}`, `{run}`, `{prompt}`, `{log}`, and `{repo}` in the command
+template, starts each worker in the background, and writes one log per worker.
+Add `--exec` when you want `kforge` to run the generated launcher immediately.
+
 Edit the generated `outputs/...-draft.md`, then attach it to the review:
 
 ```bash
@@ -559,6 +580,8 @@ kforge agent board [path] [--json]
                          show active agents, runs, tasks, and coordination gaps
 kforge agent plan [path] --agent <name> --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]
                          assign independent runs to multiple agents
+kforge agent launch [path] --agent <name> --agent <name> [--command <template>] [--write] [--exec] [--json]
+                         generate or run a parallel worker launcher
 kforge agent finish [path] --agent <name> [--run <runs/file.md>] [--status <success|failure>] [--task-done] [--note <text>] [--json]
                          finish the current agent run
 kforge agent list        list installable agent instruction templates

@@ -266,6 +266,21 @@ kforge agent plan ./my-topic \
 Each assignment gets a distinct claimed task, a `runs/` log, focused read refs,
 and the next `agent step` command for that worker.
 
+Generate a parallel launcher when you want several local agent processes to work
+at the same time:
+
+```bash
+kforge agent launch ./my-topic \
+  --agent agent-a \
+  --agent agent-b \
+  --command 'codex exec --prompt {prompt}' \
+  --write \
+  --json
+```
+
+The command template can use `{agent}`, `{task}`, `{run}`, `{prompt}`, `{log}`,
+and `{repo}`. Add `--exec` to run the generated shell launcher immediately.
+
 Check the shared board when several agents are active:
 
 ```bash

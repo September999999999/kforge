@@ -10,9 +10,12 @@ import {
   inspectRepo,
   listRuns,
   refreshRepo,
+  applyReview,
   reviewQueue,
   taskList,
+  updateReviewStatus,
   type CommandResult,
+  type ReviewStatus,
 } from "./repo.js";
 
 export interface WebDashboardOptions {
@@ -84,6 +87,31 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
 
     if (request.method === "POST" && url.pathname === "/api/refresh") {
       const result = refreshRepo(repoPath);
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/review-status") {
+      const body = await readJsonBody(request);
+      const file = optionalString(body.file);
+      const status = webReviewStatus(body.status);
+      if (!file || !status) {
+        sendJson(response, 400, { ok: false, error: "review file and status are required" });
+        return;
+      }
+      const result = updateReviewStatus(repoPath, { file, status, note: optionalString(body.note), json: true });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/review-apply-preview") {
+      const body = await readJsonBody(request);
+      const file = optionalString(body.file);
+      if (!file) {
+        sendJson(response, 400, { ok: false, error: "review file is required" });
+        return;
+      }
+      const result = applyReview(repoPath, { file, dryRun: true, json: true });
       sendJson(response, result.ok ? 200 : 400, commandResponse(result));
       return;
     }
@@ -201,6 +229,10 @@ function normalizeWebRepoRef(value: string): string {
     .replace(/^["'`]+|["'`]+$/g, "")
     .replace(/\\/g, "/")
     .replace(/^\.\//, "");
+}
+
+function webReviewStatus(value: unknown): ReviewStatus | undefined {
+  return value === "proposed" || value === "accepted" || value === "rejected" ? value : undefined;
 }
 
 function positiveNumber(value: unknown): number | undefined {
@@ -397,6 +429,11 @@ function webDashboardHtml(): string {
       color: white;
       border-color: var(--accent);
     }
+    .button.danger {
+      color: var(--danger);
+      border-color: #e2aaa4;
+      background: #fff8f7;
+    }
     .button:disabled {
       opacity: 0.55;
       cursor: wait;
@@ -533,6 +570,12 @@ function webDashboardHtml(): string {
       margin-bottom: 10px;
     }
     .viewer-meta code { max-width: 100%; }
+    .viewer-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
     .viewer-grid {
       display: grid;
       grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
@@ -551,6 +594,9 @@ function webDashboardHtml(): string {
       font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
       font-size: 12px;
       line-height: 1.5;
+    }
+    .preview-output {
+      margin-top: 12px;
     }
     @media (max-width: 980px) {
       .shell { grid-template-columns: 1fr; }
@@ -722,9 +768,70 @@ function webDashboardHtml(): string {
         $("filePreviewSummary").textContent = payload.truncated ? "truncated" : h(payload.size || 0) + " bytes";
         $("filePreviewBody").innerHTML =
           '<div class="viewer-meta"><code>' + h(payload.file) + '</code>' + (payload.truncated ? '<span class="status warn">truncated</span>' : '') + '</div>' +
-          '<div class="viewer-grid"><pre>' + h(payload.inspect) + '</pre><pre>' + h(payload.content) + '</pre></div>';
+          reviewActions(payload.file) +
+          '<div class="viewer-grid"><pre>' + h(payload.inspect) + '</pre><pre>' + h(payload.content) + '</pre></div>' +
+          '<div class="preview-output" id="applyPreview"></div>';
+        bindReviewActions(payload.file);
         location.hash = "filePreview";
         toast("Opened " + payload.file);
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function reviewActions(file) {
+      if (!String(file || "").startsWith("reviews/")) return "";
+      return '<div class="viewer-actions">' +
+        '<button class="button small primary" type="button" data-review-status="accepted">Accept</button>' +
+        '<button class="button small danger" type="button" data-review-status="rejected">Reject</button>' +
+        '<button class="button small" type="button" data-review-status="proposed">Reopen</button>' +
+        '<button class="button small" type="button" data-apply-preview="true">Apply Dry Run</button>' +
+        '</div>';
+    }
+
+    function bindReviewActions(file) {
+      for (const button of document.querySelectorAll("[data-review-status]")) {
+        button.addEventListener("click", () => updateReview(file, button.getAttribute("data-review-status") || ""));
+      }
+      for (const button of document.querySelectorAll("[data-apply-preview]")) {
+        button.addEventListener("click", () => previewApply(file));
+      }
+    }
+
+    async function updateReview(file, status) {
+      if (!file || !status) return;
+      setBusy(true);
+      try {
+        const result = await api("/api/review-status", {
+          method: "POST",
+          body: JSON.stringify({ file, status, note: "Updated from kforge web dashboard." }),
+        });
+        await load();
+        await openFile(file);
+        toast("Review status: " + (result.payload?.previousStatus || "?") + " -> " + (result.payload?.status || status));
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function previewApply(file) {
+      if (!file) return;
+      setBusy(true);
+      try {
+        const result = await api("/api/review-apply-preview", {
+          method: "POST",
+          body: JSON.stringify({ file }),
+        });
+        const payload = result.payload || {};
+        const preview = $("applyPreview");
+        if (preview) {
+          preview.innerHTML = '<div class="viewer-meta"><span class="status ok">dry run</span><code>' + h(payload.target || "") + '</code></div><pre>' + h(payload.content || result.messages?.join("\\n") || "") + '</pre>';
+        }
+        toast("Apply preview ready");
       } catch (error) {
         toast(error.message || String(error));
       } finally {

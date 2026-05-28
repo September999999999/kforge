@@ -60,8 +60,8 @@ kforge web .
 ```
 
 The web dashboard listens on `127.0.0.1` by default and shows repo health,
-review queue, task queue, runs, active agents, and safe actions for refresh,
-bootstrap, and writing agent launch scripts.
+review queue, task queue, runs, active agents, safe review file previews, and
+safe actions for refresh, bootstrap, and writing agent launch scripts.
 
 Create a compact handoff packet:
 

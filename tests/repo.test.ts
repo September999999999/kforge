@@ -328,8 +328,15 @@ test("web dashboard serves repo state and safe actions", async () => {
       const state = (await fetchJson(`${handle.url}/api/state`)) as {
         ok?: boolean;
         dashboard?: { counts?: { rawSources?: number; reviews?: number } };
-        reviews?: { total?: number };
+        reviews?: { total?: number; items?: { file?: string }[] };
         tasks?: { total?: number };
+      };
+      const reviewFile = state.reviews?.items?.[0]?.file ?? "";
+      const filePreview = (await fetchJson(`${handle.url}/api/file?path=${encodeURIComponent(reviewFile)}`)) as {
+        ok?: boolean;
+        file?: string;
+        inspect?: string;
+        content?: string;
       };
       const refresh = (await fetchJson(`${handle.url}/api/refresh`, { method: "POST" })) as { ok?: boolean };
       const launch = (await fetchJson(`${handle.url}/api/agent-launch`, {
@@ -341,16 +348,25 @@ test("web dashboard serves repo state and safe actions", async () => {
       })) as { ok?: boolean; payload?: { script?: { file?: string }; items?: unknown[] } };
 
       assert.match(html, /Knowledge Repo Dashboard/);
+      assert.match(html, /File Preview/);
       assert.equal(state.ok, true);
       assert.equal(state.dashboard?.counts?.rawSources, 1);
       assert.equal(state.dashboard?.counts?.reviews, 1);
       assert.equal(state.reviews?.total, 1);
       assert.equal(state.tasks?.total, 0);
+      assert.equal(filePreview.ok, true);
+      assert.equal(filePreview.file, reviewFile);
+      assert.match(filePreview.inspect ?? "", /# File Inspect/);
+      assert.match(filePreview.content ?? "", /# Review: Web Review/);
       assert.equal(refresh.ok, true);
       assert.equal(launch.ok, true);
       assert.equal(launch.payload?.items?.length, 1);
       assert.match(launch.payload?.script?.file ?? "", /^runs\/.+agent-launch.*\.sh$/);
       assert.match(await readFile(path.join(repoPath, launch.payload?.script?.file ?? ""), "utf8"), /printf web-a:runs\//);
+
+      const outside = await fetch(`${handle.url}/api/file?path=${encodeURIComponent("../outside.md")}`);
+      assert.equal(outside.status, 400);
+      assert.match(await outside.text(), /outside repo/);
     } finally {
       await handle.close();
     }

@@ -1,4 +1,5 @@
 import http, { type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import fs from "node:fs";
 import path from "node:path";
 import {
   agentBoard,
@@ -6,6 +7,7 @@ import {
   bootstrapRepo,
   dashboardRepo,
   doctorRepo,
+  inspectRepo,
   listRuns,
   refreshRepo,
   reviewQueue,
@@ -69,6 +71,17 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
       return;
     }
 
+    if (request.method === "GET" && url.pathname === "/api/file") {
+      const file = optionalString(url.searchParams.get("path") ?? url.searchParams.get("file"));
+      if (!file) {
+        sendJson(response, 400, { ok: false, error: "file path is required" });
+        return;
+      }
+      const result = webFilePayload(repoPath, file);
+      sendJson(response, result.ok ? 200 : 400, result);
+      return;
+    }
+
     if (request.method === "POST" && url.pathname === "/api/refresh") {
       const result = refreshRepo(repoPath);
       sendJson(response, result.ok ? 200 : 400, commandResponse(result));
@@ -111,6 +124,28 @@ function webDashboardState(repoPath: string): Record<string, unknown> {
     tasks: parseJsonResult(taskList(repoPath, { status: "all", json: true })),
     runs: parseJsonResult(listRuns(repoPath, { status: "all", json: true })),
     agents: parseJsonResult(agentBoard(repoPath, { json: true })),
+  };
+}
+
+function webFilePayload(repoPath: string, file: string): Record<string, unknown> {
+  const fileRef = normalizeWebRepoRef(file);
+  const inspect = inspectRepo(repoPath, { file: fileRef });
+  if (!inspect.ok) {
+    return commandResponse(inspect);
+  }
+
+  const target = path.resolve(repoPath, fileRef);
+  const stats = fs.statSync(target);
+  const maxBytes = 256 * 1024;
+  const raw = fs.readFileSync(target);
+  const content = raw.subarray(0, maxBytes).toString("utf8");
+  return {
+    ok: true,
+    file: fileRef,
+    size: stats.size,
+    truncated: raw.length > maxBytes,
+    inspect: inspect.messages[0] ?? "",
+    content,
   };
 }
 
@@ -158,6 +193,14 @@ function stringList(value: unknown): string[] {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function normalizeWebRepoRef(value: string): string {
+  return value
+    .trim()
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/\\/g, "/")
+    .replace(/^\.\//, "");
 }
 
 function positiveNumber(value: unknown): number | undefined {
@@ -358,6 +401,11 @@ function webDashboardHtml(): string {
       opacity: 0.55;
       cursor: wait;
     }
+    .button.small {
+      min-height: 30px;
+      padding: 5px 8px;
+      font-size: 12px;
+    }
     .grid {
       display: grid;
       gap: 14px;
@@ -477,6 +525,33 @@ function webDashboardHtml(): string {
       color: var(--muted);
       padding: 10px 0;
     }
+    .viewer-meta {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .viewer-meta code { max-width: 100%; }
+    .viewer-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+      gap: 12px;
+    }
+    pre {
+      margin: 0;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fbfcfa;
+      padding: 10px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 420px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.5;
+    }
     @media (max-width: 980px) {
       .shell { grid-template-columns: 1fr; }
       aside {
@@ -488,6 +563,7 @@ function webDashboardHtml(): string {
       main { padding: 18px; }
       .metrics { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
       .layout { grid-template-columns: 1fr; }
+      .viewer-grid { grid-template-columns: 1fr; }
       header { display: grid; }
     }
   </style>
@@ -523,6 +599,10 @@ function webDashboardHtml(): string {
           <section id="reviews">
             <div class="section-head"><h2>Review Queue</h2><span class="status" id="doctorStatus">doctor</span></div>
             <div class="section-body" id="reviewTable"></div>
+          </section>
+          <section id="filePreview">
+            <div class="section-head"><h2>File Preview</h2><span class="subtle" id="filePreviewSummary"></span></div>
+            <div class="section-body" id="filePreviewBody"><div class="empty">Select a review to inspect its file.</div></div>
           </section>
           <section>
             <div class="section-head"><h2>Tasks</h2><span class="subtle" id="taskSummary"></span></div>
@@ -626,9 +706,30 @@ function webDashboardHtml(): string {
         $("reviewTable").innerHTML = '<div class="empty">No reviews.</div>';
         return;
       }
-      $("reviewTable").innerHTML = '<table><thead><tr><th>Priority</th><th>Review</th><th>Status</th><th>Kind</th><th>Next</th></tr></thead><tbody>' +
-        items.map((item) => '<tr><td>' + h(item.priority) + '</td><td><code>' + h(item.file) + '</code><br>' + h(item.title) + '</td><td>' + badge(item.status) + '</td><td>' + h(item.kind) + '</td><td>' + h(item.nextAction) + '</td></tr>').join("") +
+      $("reviewTable").innerHTML = '<table><thead><tr><th>Priority</th><th>Review</th><th>Status</th><th>Kind</th><th>Next</th><th></th></tr></thead><tbody>' +
+        items.map((item) => '<tr><td>' + h(item.priority) + '</td><td><code>' + h(item.file) + '</code><br>' + h(item.title) + '</td><td>' + badge(item.status) + '</td><td>' + h(item.kind) + '</td><td>' + h(item.nextAction) + '</td><td><button class="button small" type="button" data-open-file="' + h(item.file) + '">Open</button></td></tr>').join("") +
         '</tbody></table>';
+      for (const button of document.querySelectorAll("[data-open-file]")) {
+        button.addEventListener("click", () => openFile(button.getAttribute("data-open-file") || ""));
+      }
+    }
+
+    async function openFile(file) {
+      if (!file) return;
+      setBusy(true);
+      try {
+        const payload = await api("/api/file?path=" + encodeURIComponent(file));
+        $("filePreviewSummary").textContent = payload.truncated ? "truncated" : h(payload.size || 0) + " bytes";
+        $("filePreviewBody").innerHTML =
+          '<div class="viewer-meta"><code>' + h(payload.file) + '</code>' + (payload.truncated ? '<span class="status warn">truncated</span>' : '') + '</div>' +
+          '<div class="viewer-grid"><pre>' + h(payload.inspect) + '</pre><pre>' + h(payload.content) + '</pre></div>';
+        location.hash = "filePreview";
+        toast("Opened " + payload.file);
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
     }
 
     function renderTasks(tasks) {

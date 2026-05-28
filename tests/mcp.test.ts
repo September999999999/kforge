@@ -36,6 +36,7 @@ test("mcp server exposes kforge tools over stdio", async () => {
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_demo"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_add"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_fetch"), true);
+    assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_fetch_list"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_import"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_refresh"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_list"), true);
@@ -163,6 +164,29 @@ test("mcp server exposes kforge tools over stdio", async () => {
     assert.equal(sourceFetchPayload.status, 200);
     assert.match(sourceFetchPayload.next?.join("\n") ?? "", /kforge source inspect/);
     assert.match(await readFile(path.join(repoPath, "raw", "mcp-web-note.md"), "utf8"), /# MCP Web Note/);
+
+    const urlListPath = path.join(path.dirname(sourcePath), "urls.txt");
+    await writeFile(urlListPath, `MCP Batch | ${webServer.url}/mcp-note\n`, "utf8");
+    const sourceFetchList = await client.callTool({
+      name: "kforge_source_fetch_list",
+      arguments: {
+        file: urlListPath,
+        titlePrefix: "List",
+        dryRun: true,
+        json: true,
+      },
+    });
+    const sourceFetchListPayload = JSON.parse(firstText(sourceFetchList.content)) as {
+      dryRun?: boolean;
+      counts?: { wouldFetch?: number; fetched?: number; failed?: number };
+      items?: Array<{ action?: string; title?: string }>;
+    };
+    assert.equal(sourceFetchListPayload.dryRun, true);
+    assert.equal(sourceFetchListPayload.counts?.wouldFetch, 1);
+    assert.equal(sourceFetchListPayload.counts?.fetched, 0);
+    assert.equal(sourceFetchListPayload.counts?.failed, 0);
+    assert.equal(sourceFetchListPayload.items?.[0]?.action, "would_fetch");
+    assert.equal(sourceFetchListPayload.items?.[0]?.title, "List MCP Batch");
 
     const sourceList = await client.callTool({ name: "kforge_source_list", arguments: {} });
     assert.match(firstText(sourceList.content), /raw\/mcp-source.md/);

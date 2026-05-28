@@ -38,6 +38,8 @@ accepts a `path` argument when an agent needs to operate on a different repo.
   `kforge source add --json`
 - `kforge_source_fetch`: fetch a text or HTML URL into `raw/` with metadata;
   pass `json: true` for fetched status, content type, and created refs
+- `kforge_source_fetch_list`: fetch URLs from a local text file into `raw/`;
+  pass `json: true` for dry-run/fetch counts and per-URL refs or errors
 - `kforge_source_import`: copy a local source directory into `raw/` with
   metadata; pass `json: true` for dry-run/import counts and per-file refs
 - `kforge_source_list`: list raw sources and metadata sidecars

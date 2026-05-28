@@ -267,6 +267,11 @@ kforge source fetch ~/research/my-topic \
   --url "https://example.com/article" \
   --title "Important Article"
 
+kforge source fetch-list ~/research/my-topic \
+  --file ~/Downloads/urls.txt \
+  --title-prefix "Project A" \
+  --dry-run
+
 kforge source import ~/research/my-topic \
   --dir ~/Downloads/research-folder \
   --title-prefix "Project A" \
@@ -281,9 +286,10 @@ kforge source inspect ~/research/my-topic --file raw/important-article.md
 kforge refresh ~/research/my-topic
 ```
 
-Automation can add `--json` to `source add`, `source fetch`, or `source import`
-to get the created `raw/` and `raw/_meta/` paths, fetched response metadata,
-import counts, and dry-run plan as a single machine-readable payload.
+Automation can add `--json` to `source add`, `source fetch`,
+`source fetch-list`, or `source import` to get the created `raw/` and
+`raw/_meta/` paths, fetched response metadata, import counts, and dry-run plans
+as a single machine-readable payload.
 
 Create a source-grounded claim:
 
@@ -578,6 +584,8 @@ kforge source add [path] --file <local-file> [--title <title>] [--url <url>] [--
                          copy a local source into raw/
 kforge source fetch [path] --url <url> [--title <title>] [--json]
                          fetch a text or HTML URL into raw/
+kforge source fetch-list [path] --file <urls.txt> [--title-prefix <text>] [--dry-run] [--json]
+                         fetch a URL list into raw/
 kforge source import [path] --dir <local-dir> [--title-prefix <text>] [--dry-run] [--json]
                          copy a local source directory into raw/
 kforge source list [path]

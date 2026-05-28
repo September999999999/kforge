@@ -157,6 +157,10 @@ kforge source fetch ./my-topic \
   --url "https://example.com/source" \
   --title "Source"
 
+kforge source fetch-list ./my-topic \
+  --file ~/Downloads/urls.txt \
+  --dry-run
+
 kforge source import ./my-topic \
   --dir ~/Downloads/research-folder \
   --title-prefix "Research" \
@@ -172,9 +176,9 @@ kforge refresh ./my-topic
 kforge compile plan ./my-topic
 ```
 
-Automation can append `--json` to `source add`, `source fetch`, or
-`source import` to read the created raw paths, metadata paths, fetched response
-metadata, and import plan without parsing text output.
+Automation can append `--json` to `source add`, `source fetch`,
+`source fetch-list`, or `source import` to read the created raw paths, metadata
+paths, fetched response metadata, and import plan without parsing text output.
 
 For durable assertions:
 

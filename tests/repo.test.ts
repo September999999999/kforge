@@ -29,6 +29,7 @@ import {
   demoRepo,
   doctorRepo,
   fetchSource,
+  fetchSources,
   finishRun,
   graphRepo,
   handoffRepo,
@@ -85,6 +86,7 @@ import {
   type RunNextPayload,
   type RunStartPayload,
   type SourceImportPayload,
+  type SourceFetchListPayload,
   type SourceFetchPayload,
   type TaskClaimPayload,
   type TaskDonePayload,
@@ -497,6 +499,56 @@ test("fetchSource imports a URL as markdown with metadata", async () => {
   } finally {
     await server.close();
     await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test("fetchSources imports a URL list with dry-run and JSON summaries", async () => {
+  const repoPath = await tempRepoPath();
+  const listDir = await tempRepoPath();
+  const listPath = path.join(listDir, "urls.txt");
+  const server = await startHttpServer({
+    "/one": {
+      contentType: "text/html; charset=utf-8",
+      body: "<html><head><title>One Article</title></head><body><h1>One Article</h1><p>First.</p></body></html>",
+    },
+    "/two": {
+      contentType: "text/plain; charset=utf-8",
+      body: "# Two Article\n\nSecond.\n",
+    },
+  });
+  try {
+    initRepo(repoPath);
+    await writeFile(
+      listPath,
+      `# URL list\nFirst Title | ${server.url}/one\n[Second Title](${server.url}/two)\n`,
+      "utf8",
+    );
+
+    const dryRun = JSON.parse(
+      (await fetchSources(repoPath, { file: listPath, titlePrefix: "Research", dryRun: true, json: true })).messages[0],
+    ) as SourceFetchListPayload;
+    const result = JSON.parse(
+      (await fetchSources(repoPath, { file: listPath, titlePrefix: "Research", json: true })).messages[0],
+    ) as SourceFetchListPayload;
+
+    assert.equal(dryRun.dryRun, true);
+    assert.equal(dryRun.counts.candidates, 2);
+    assert.equal(dryRun.counts.wouldFetch, 2);
+    assert.equal(dryRun.items[0].action, "would_fetch");
+    assert.equal(dryRun.items[0].title, "Research First Title");
+    assert.equal(result.dryRun, false);
+    assert.equal(result.counts.fetched, 2);
+    assert.equal(result.counts.failed, 0);
+    assert.equal(result.items[0].action, "fetched");
+    assert.equal(result.items[0].source, "raw/research-first-title.md");
+    assert.equal(result.items[1].source, "raw/research-second-title.md");
+    assert.match(result.next.join("\n"), /kforge compile plan/);
+    assert.match(await readFile(path.join(repoPath, "raw", "research-first-title.md"), "utf8"), /# One Article/);
+    assert.match(await readFile(path.join(repoPath, "raw", "_meta", "research-first-title.md"), "utf8"), /Fetched from URL list:/);
+  } finally {
+    await server.close();
+    await rm(repoPath, { recursive: true, force: true });
+    await rm(listDir, { recursive: true, force: true });
   }
 });
 

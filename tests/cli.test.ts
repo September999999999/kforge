@@ -35,6 +35,7 @@ test("cli help exposes the public command surface", async () => {
   assert.match(result.stdout, /kforge compile draft \[path\] .* \[--json\]/);
   assert.match(result.stdout, /kforge source add \[path\] --file <local-file> .* \[--json\]/);
   assert.match(result.stdout, /kforge source fetch \[path\] --url <url> .* \[--json\]/);
+  assert.match(result.stdout, /kforge source fetch-list \[path\] --file <urls\.txt> .* \[--json\]/);
   assert.match(result.stdout, /kforge source import \[path\] --dir <local-dir> .* \[--json\]/);
   assert.match(result.stdout, /kforge compile draft \[path\]/);
   assert.match(result.stdout, /kforge review queue \[path\]/);
@@ -449,6 +450,55 @@ test("cli fetches a URL source as JSON", async () => {
   } finally {
     await server.close();
     await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test("cli fetches a URL list with dry-run and JSON", async () => {
+  const repoPath = await mkdtemp(path.join(tmpdir(), "kforge-cli-source-fetch-list-"));
+  const listDir = await mkdtemp(path.join(tmpdir(), "kforge-cli-url-list-"));
+  const listPath = path.join(listDir, "urls.txt");
+  const server = await startHttpServer({
+    "/one": {
+      contentType: "text/html; charset=utf-8",
+      body: "<html><head><title>CLI List One</title></head><body><h1>CLI List One</h1></body></html>",
+    },
+    "/two": {
+      contentType: "text/plain; charset=utf-8",
+      body: "# CLI List Two\n",
+    },
+  });
+  try {
+    await runCli(["init", repoPath]);
+    await writeFile(listPath, `One | ${server.url}/one\nTwo | ${server.url}/two\n`, "utf8");
+
+    const dryRun = await runCli(["source", "fetch-list", repoPath, "--file", listPath, "--dry-run", "--json"]);
+    const dryRunPayload = JSON.parse(dryRun.stdout) as {
+      dryRun?: boolean;
+      counts?: { wouldFetch?: number; fetched?: number };
+      items?: Array<{ action?: string; title?: string }>;
+    };
+    const result = await runCli(["source", "fetch-list", repoPath, "--file", listPath, "--title-prefix", "Batch", "--json"]);
+    const payload = JSON.parse(result.stdout) as {
+      dryRun?: boolean;
+      counts?: { fetched?: number; failed?: number };
+      items?: Array<{ action?: string; source?: string; metadata?: string }>;
+    };
+
+    assert.equal(dryRun.exitCode, 0);
+    assert.equal(dryRunPayload.dryRun, true);
+    assert.equal(dryRunPayload.counts?.wouldFetch, 2);
+    assert.equal(dryRunPayload.items?.[0]?.action, "would_fetch");
+    assert.equal(result.exitCode, 0);
+    assert.equal(payload.dryRun, false);
+    assert.equal(payload.counts?.fetched, 2);
+    assert.equal(payload.counts?.failed, 0);
+    assert.equal(payload.items?.[0]?.source, "raw/batch-one.md");
+    assert.equal(payload.items?.[1]?.metadata, "raw/_meta/batch-two.md");
+    assert.match(await readFile(path.join(repoPath, "raw", "batch-one.md"), "utf8"), /# CLI List One/);
+  } finally {
+    await server.close();
+    await rm(repoPath, { recursive: true, force: true });
+    await rm(listDir, { recursive: true, force: true });
   }
 });
 

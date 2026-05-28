@@ -32,6 +32,7 @@ import {
   demoRepo,
   doctorRepo,
   fetchSource,
+  fetchSources,
   finishRun,
   graphRepo,
   handoffRepo,
@@ -239,6 +240,38 @@ export function createKforgeMcpServer(options: McpOptions = {}): McpServer {
           date,
           license,
           note,
+          json,
+        }),
+      ),
+  );
+
+  server.registerTool(
+    "kforge_source_fetch_list",
+    {
+      title: "Fetch URL source list",
+      description: "Fetch URLs listed in a local text file into raw/ and create source metadata sidecars.",
+      inputSchema: z.object({
+        path: repoPathSchema,
+        file: z.string().min(1),
+        titlePrefix: z.string().optional(),
+        author: z.string().optional(),
+        date: z.string().optional(),
+        license: z.string().optional(),
+        note: z.string().optional(),
+        dryRun: z.boolean().optional(),
+        json: z.boolean().optional(),
+      }),
+    },
+    async ({ path: repoPath, file, titlePrefix, author, date, license, note, dryRun, json }) =>
+      runAsTool(() =>
+        fetchSources(toolRepoPath(defaultRepoPath, repoPath), {
+          file,
+          titlePrefix,
+          author,
+          date,
+          license,
+          note,
+          dryRun,
           json,
         }),
       ),

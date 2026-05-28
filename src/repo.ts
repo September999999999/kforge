@@ -74,6 +74,17 @@ export interface FetchSourceOptions {
   json?: boolean;
 }
 
+export interface FetchSourcesOptions {
+  file: string;
+  titlePrefix?: string;
+  author?: string;
+  date?: string;
+  license?: string;
+  note?: string;
+  dryRun?: boolean;
+  json?: boolean;
+}
+
 export interface ImportSourcesOptions {
   dir: string;
   titlePrefix?: string;
@@ -114,6 +125,35 @@ export interface SourceFetchPayload {
   status: number;
   contentType: string;
   bytes: number;
+  next: string[];
+}
+
+export type SourceFetchListAction = "would_fetch" | "fetched" | "failed";
+
+export interface SourceFetchListItem {
+  url: string;
+  title?: string;
+  source?: string;
+  metadata?: string;
+  status?: number;
+  contentType?: string;
+  bytes?: number;
+  error?: string;
+  action: SourceFetchListAction;
+}
+
+export interface SourceFetchListPayload {
+  ok: true;
+  dryRun: boolean;
+  updatedAt: string;
+  file: string;
+  counts: {
+    candidates: number;
+    wouldFetch: number;
+    fetched: number;
+    failed: number;
+  };
+  items: SourceFetchListItem[];
   next: string[];
 }
 
@@ -1029,6 +1069,75 @@ export async function fetchSource(repoPath: string, options: FetchSourceOptions)
       `Added ${imported.rawRef}`,
       `Wrote ${imported.metadataRef}`,
       "Next: run `kforge refresh`, then inspect or compile from the fetched source.",
+    ],
+  };
+}
+
+export async function fetchSources(repoPath: string, options: FetchSourcesOptions): Promise<CommandResult> {
+  requireRepo(repoPath);
+
+  const listPath = path.resolve(options.file);
+  if (!exists(listPath)) {
+    return { ok: false, messages: [`source URL list not found: ${options.file}`] };
+  }
+
+  if (!statSyncish(listPath).isFile()) {
+    return { ok: false, messages: [`source URL list path is not a file: ${options.file}`] };
+  }
+
+  const candidates = sourceFetchListCandidates(listPath, options.titlePrefix);
+  if (candidates.length === 0) {
+    return { ok: false, messages: [`source URL list has no http or https URLs: ${options.file}`] };
+  }
+
+  if (options.dryRun) {
+    const items = candidates.map((candidate) => sourceFetchListItem(candidate.url, "would_fetch", { title: candidate.title }));
+    if (options.json) {
+      return { ok: true, messages: [JSON.stringify(sourceFetchListPayload(listPath, items, true), null, 2)] };
+    }
+    return {
+      ok: true,
+      messages: [
+        `Dry run: would fetch ${items.length} URL source(s) from ${listPath}`,
+        ...items.map((item) => `- ${item.url}${item.title ? ` -> ${item.title}` : ""}`),
+      ],
+    };
+  }
+
+  const items: SourceFetchListItem[] = [];
+  for (const candidate of candidates) {
+    const fetched = await fetchUrlSource(candidate.url);
+    if (!fetched.ok) {
+      items.push(sourceFetchListItem(candidate.url, "failed", { title: candidate.title, error: fetched.messages.join("; ") }));
+      continue;
+    }
+
+    const imported = importFetchedSource(repoPath, candidate.url, fetched, {
+      title: candidate.title,
+      author: options.author,
+      date: options.date,
+      license: options.license,
+      note: sourceFetchListNote(listPath, candidate.index, options.note),
+    });
+    items.push(sourceFetchListItem(candidate.url, "fetched", { title: candidate.title, copied: imported, fetched }));
+  }
+
+  const payload = sourceFetchListPayload(listPath, items, false);
+  if (options.json) {
+    return { ok: true, messages: [JSON.stringify(payload, null, 2)] };
+  }
+
+  return {
+    ok: true,
+    messages: [
+      `Fetched ${payload.counts.fetched} URL source(s) from ${listPath}`,
+      ...(payload.counts.failed > 0 ? [`Failed ${payload.counts.failed} URL source(s).`] : []),
+      ...items.map((item) =>
+        item.action === "fetched"
+          ? `- ${item.url} -> ${item.source} (metadata: ${item.metadata})`
+          : `- ${item.url} -> failed: ${item.error}`,
+      ),
+      "Next: run `kforge refresh`, then inspect or compile from the fetched sources.",
     ],
   };
 }
@@ -7353,6 +7462,12 @@ type FetchedSource = {
   finalUrl: string;
 };
 
+type SourceFetchListCandidate = {
+  index: number;
+  url: string;
+  title?: string;
+};
+
 type SourceImportPlanItem = {
   sourcePath: string;
   relativePath: string;
@@ -7398,6 +7513,46 @@ function sourceFetchPayload(
       "kforge compile plan . --json",
       `kforge source inspect . --file ${copied.rawRef}`,
     ],
+  };
+}
+
+function sourceFetchListPayload(
+  file: string,
+  items: SourceFetchListItem[],
+  dryRun: boolean,
+): SourceFetchListPayload {
+  return {
+    ok: true,
+    dryRun,
+    updatedAt: today(),
+    file,
+    counts: {
+      candidates: items.length,
+      wouldFetch: items.filter((item) => item.action === "would_fetch").length,
+      fetched: items.filter((item) => item.action === "fetched").length,
+      failed: items.filter((item) => item.action === "failed").length,
+    },
+    items,
+    next: dryRun
+      ? ["kforge source fetch-list . --file <urls.txt> --json"]
+      : ["kforge compile plan . --json", "kforge review queue . --json"],
+  };
+}
+
+function sourceFetchListItem(
+  url: string,
+  action: SourceFetchListAction,
+  input: { title?: string; copied?: CopiedSource; fetched?: FetchedSource; error?: string },
+): SourceFetchListItem {
+  return {
+    url,
+    ...(input.title ? { title: input.title } : {}),
+    ...(input.copied ? { source: input.copied.rawRef, metadata: input.copied.metadataRef } : {}),
+    ...(input.fetched
+      ? { status: input.fetched.status, contentType: input.fetched.contentType, bytes: input.fetched.bytes }
+      : {}),
+    ...(input.error ? { error: input.error } : {}),
+    action,
   };
 }
 
@@ -7496,7 +7651,7 @@ function importFetchedSource(
   repoPath: string,
   url: string,
   fetched: FetchedSource,
-  options: FetchSourceOptions,
+  options: Omit<FetchSourceOptions, "url">,
 ): CopiedSource {
   const title = sourceFetchTitle(url, fetched, options);
   const target = nextAvailableRawPath(repoPath, slugify(title) || "web-source", ".md");
@@ -7523,6 +7678,59 @@ function importFetchedSource(
   };
 }
 
+function sourceFetchListCandidates(file: string, titlePrefix: string | undefined): SourceFetchListCandidate[] {
+  return readText(file)
+    .split(/\r?\n/)
+    .map((line, index) => ({ line: line.trim(), index: index + 1 }))
+    .filter((item) => item.line && !item.line.startsWith("#"))
+    .flatMap((item) => {
+      const parsed = parseSourceFetchListLine(item.line);
+      if (!parsed) {
+        return [];
+      }
+      const title = parsed.title ? [titlePrefix?.trim(), parsed.title].filter(Boolean).join(" ").trim() : undefined;
+      return [{ index: item.index, url: parsed.url, ...(title ? { title } : {}) }];
+    });
+}
+
+function parseSourceFetchListLine(line: string): { url: string; title?: string } | undefined {
+  const trimmed = line.trim();
+  const directUrl = normalizeFetchUrl(trimmed);
+  if (directUrl) {
+    return { url: directUrl };
+  }
+
+  const markdown = trimmed.match(/^\[(.+?)\]\((https?:\/\/[^)]+)\)$/i);
+  if (markdown) {
+    const url = normalizeFetchUrl(markdown[2]);
+    return url ? { url, title: markdown[1].trim() } : undefined;
+  }
+
+  const separated = trimmed.match(/^(.+?)\s*(?:\||,|\t)\s*(https?:\/\/\S+)$/i);
+  if (separated) {
+    const url = normalizeFetchUrl(separated[2]);
+    return url ? { url, title: separated[1].trim() } : undefined;
+  }
+
+  const trailingUrl = trimmed.match(/(https?:\/\/\S+)/i)?.[1];
+  if (trailingUrl) {
+    const url = normalizeFetchUrl(trailingUrl);
+    const title = trimmed.slice(0, trimmed.indexOf(trailingUrl)).trim().replace(/[-|,:]+$/, "").trim();
+    return url ? { url, ...(title ? { title } : {}) } : undefined;
+  }
+
+  return undefined;
+}
+
+function sourceFetchListNote(file: string, line: number, note: string | undefined): string {
+  const lines = [`Fetched from URL list: \`${file}\` line ${line}.`];
+  const normalizedNote = note?.trim();
+  if (normalizedNote) {
+    lines.push("", normalizedNote);
+  }
+  return lines.join("\n");
+}
+
 function normalizeFetchUrl(value: string): string | undefined {
   try {
     const url = new URL(value);
@@ -7545,7 +7753,7 @@ function isTextFetchContentType(contentType: string): boolean {
   );
 }
 
-function sourceFetchTitle(url: string, fetched: FetchedSource, options: FetchSourceOptions): string {
+function sourceFetchTitle(url: string, fetched: FetchedSource, options: { title?: string }): string {
   const explicit = options.title?.trim();
   if (explicit) {
     return explicit;

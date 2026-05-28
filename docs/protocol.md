@@ -31,6 +31,10 @@ responses are converted into simple Markdown-like text with headings and links
 preserved for source inspection. This is an opt-in network ingest command; the
 repo protocol does not require network access.
 
+`kforge source fetch-list` reads a local text file of URLs and fetches them into
+`raw/`. Lines may be plain URLs, Markdown links, or simple `Title | URL` rows.
+Use `--dry-run` to preview the URL plan before network calls are made.
+
 `kforge source import` copies files from a local directory into `raw/` and
 writes the same metadata sidecars. It recursively imports normal files, skips
 hidden paths, symlinks, and common generated directories, and refuses to import
@@ -40,9 +44,11 @@ import plan.
 Ingest commands accept `--json` for agent and script handoff. `source add
 --json` returns the created `source`, `metadata`, original path, and suggested
 next commands. `source fetch --json` returns the fetched URL, status,
-content-type, created refs, and next commands. `source import --json` returns
-`dryRun`, `counts`, and one item per candidate with source and metadata refs;
-`--dry-run --json` reports `would_import` items without copying files.
+content-type, created refs, and next commands. `source fetch-list --json`
+returns `dryRun`, `counts`, and one item per URL with fetch status and created
+refs. `source import --json` returns `dryRun`, `counts`, and one item per
+candidate with source and metadata refs; `--dry-run --json` reports
+`would_import` items without copying files.
 
 Examples:
 
@@ -52,6 +58,8 @@ kforge source add . --file ~/Downloads/article.md --url "https://example.com/art
 kforge source add . --file ~/Downloads/article.md --json
 kforge source fetch . --url "https://example.com/article" --title "Article"
 kforge source fetch . --url "https://example.com/article" --json
+kforge source fetch-list . --file ~/Downloads/urls.txt --dry-run
+kforge source fetch-list . --file ~/Downloads/urls.txt --json
 kforge source import . --dir ~/Downloads/research-folder --title-prefix "Project A" --dry-run
 kforge source import . --dir ~/Downloads/research-folder --title-prefix "Project A" --dry-run --json
 kforge source import . --dir ~/Downloads/research-folder --title-prefix "Project A"

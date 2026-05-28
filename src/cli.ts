@@ -27,6 +27,7 @@ import {
   demoRepo,
   doctorRepo,
   fetchSource,
+  fetchSources,
   finishRun,
   graphRepo,
   handoffRepo,
@@ -738,9 +739,28 @@ async function runSourceCommand(args: string[]): Promise<CommandResult> {
     return fetchSource(repoPath, { url, title, author, date, license, note, json });
   }
 
+  if (subcommand === "fetch-list") {
+    const parsed = parseArgs(rest);
+    const repoPath = resolveRepoPath(parsed.positionals[0] ?? ".");
+    const file = oneOption(parsed.options, "file");
+    const titlePrefix = oneOption(parsed.options, "title-prefix", false);
+    const author = oneOption(parsed.options, "author", false);
+    const date = oneOption(parsed.options, "date", false);
+    const license = oneOption(parsed.options, "license", false);
+    const note = oneOption(parsed.options, "note", false);
+    const dryRun = flagOption(parsed.options, "dry-run");
+    const json = flagOption(parsed.options, "json");
+
+    if (!file) {
+      throw new Error("Missing required option: --file");
+    }
+
+    return fetchSources(repoPath, { file, titlePrefix, author, date, license, note, dryRun, json });
+  }
+
   if (subcommand !== "add") {
     throw new Error(
-      "Usage: kforge source add [path] --file <local-file> [--json]\n       kforge source fetch [path] --url <url> [--title <title>] [--json]\n       kforge source import [path] --dir <local-dir> [--dry-run] [--json]\n       kforge source list [path]\n       kforge source inspect [path] --file <raw/file>",
+      "Usage: kforge source add [path] --file <local-file> [--json]\n       kforge source fetch [path] --url <url> [--title <title>] [--json]\n       kforge source fetch-list [path] --file <urls.txt> [--dry-run] [--json]\n       kforge source import [path] --dir <local-dir> [--dry-run] [--json]\n       kforge source list [path]\n       kforge source inspect [path] --file <raw/file>",
     );
   }
 
@@ -1073,6 +1093,8 @@ Usage:
                                                        copy a local source into raw/
   kforge source fetch [path] --url <url> [--title <title>] [--json]
                                                        fetch a text or HTML URL into raw/
+  kforge source fetch-list [path] --file <urls.txt> [--title-prefix <text>] [--dry-run] [--json]
+                                                       fetch a URL list into raw/
   kforge source import [path] --dir <local-dir> [--title-prefix <text>] [--dry-run] [--json]
                                                        copy a local source directory into raw/
   kforge source list [path]                            list raw sources and metadata

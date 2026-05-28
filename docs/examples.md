@@ -234,6 +234,17 @@ kforge source fetch ./my-topic \
   --title "Important Article"
 ```
 
+Or fetch a list of web sources:
+
+```bash
+kforge source fetch-list ./my-topic \
+  --file ~/Downloads/urls.txt \
+  --dry-run
+
+kforge source fetch-list ./my-topic \
+  --file ~/Downloads/urls.txt
+```
+
 Or import a whole local research folder:
 
 ```bash

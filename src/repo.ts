@@ -427,6 +427,17 @@ export interface AgentStatusPayload {
   next: string[];
 }
 
+export interface AgentBoardOptions {
+  json?: boolean;
+}
+
+export interface AgentBoardAgent {
+  agent: string;
+  runningRuns: RunItem[];
+  claimedTasks: TaskItem[];
+  next: string[];
+}
+
 export interface AgentPlanOptions {
   agents: string[];
   seed?: boolean;
@@ -453,6 +464,27 @@ export interface AgentPlanPayload {
   seeded: TaskSeedPayload;
   assignments: AgentPlanAssignment[];
   unassignedAgents: string[];
+  next: string[];
+}
+
+export interface AgentBoardPayload {
+  ok: true;
+  updatedAt: string;
+  counts: {
+    agents: number;
+    openTasks: number;
+    claimedTasks: number;
+    doneTasks: number;
+    runningRuns: number;
+    successfulRuns: number;
+    failedRuns: number;
+    orphanClaimedTasks: number;
+    runsWithoutClaimedTask: number;
+  };
+  agents: AgentBoardAgent[];
+  openTasks: TaskItem[];
+  orphanClaimedTasks: TaskItem[];
+  runsWithoutClaimedTask: RunItem[];
   next: string[];
 }
 
@@ -2107,6 +2139,111 @@ export function agentStatus(repoPath: string, options: AgentStatusOptions): Comm
           ...claimedTasks.map((task) => `| ${task.priority} | [${escapeTableCell(task.title)}](${task.file}) | \`${task.source}\` | ${escapeTableCell(task.nextAction)} |`),
         ]
       : ["No claimed tasks for this agent."]),
+    "",
+    "## Next",
+    "",
+    ...payload.next.map((command) => `- \`${command}\``),
+    "",
+  ];
+
+  return { ok: true, messages: [lines.join("\n")] };
+}
+
+export function agentBoard(repoPath: string, options: AgentBoardOptions = {}): CommandResult {
+  requireRepo(repoPath);
+
+  const tasks = taskItems(repoPath);
+  const runs = runItems(repoPath);
+  const runningRuns = runs.filter((run) => run.status === "running");
+  const claimedTasks = tasks.filter((task) => task.status === "claimed");
+  const agentNames = [...new Set([...runningRuns.map((run) => run.agent), ...claimedTasks.map((task) => task.owner ?? "")].filter(Boolean))].sort();
+  const agents: AgentBoardAgent[] = agentNames.map((agent) => {
+    const agentRuns = runningRuns.filter((run) => run.agent === agent);
+    const agentTasks = claimedTasks.filter((task) => task.owner === agent);
+    return {
+      agent,
+      runningRuns: agentRuns,
+      claimedTasks: agentTasks,
+      next: agentStatusNext(agent, agentRuns, agentTasks),
+    };
+  });
+  const runningTaskRefs = new Set(runningRuns.map((run) => run.task));
+  const orphanClaimedTasks = claimedTasks.filter((task) => !runningTaskRefs.has(task.file));
+  const claimedTaskRefs = new Set(claimedTasks.map((task) => task.file));
+  const runsWithoutClaimedTask = runningRuns.filter((run) => !claimedTaskRefs.has(run.task));
+  const openTasks = tasks.filter((task) => task.status === "open");
+
+  const payload: AgentBoardPayload = {
+    ok: true,
+    updatedAt: today(),
+    counts: {
+      agents: agents.length,
+      openTasks: openTasks.length,
+      claimedTasks: claimedTasks.length,
+      doneTasks: tasks.filter((task) => task.status === "done").length,
+      runningRuns: runningRuns.length,
+      successfulRuns: runs.filter((run) => run.status === "success").length,
+      failedRuns: runs.filter((run) => run.status === "failure").length,
+      orphanClaimedTasks: orphanClaimedTasks.length,
+      runsWithoutClaimedTask: runsWithoutClaimedTask.length,
+    },
+    agents,
+    openTasks,
+    orphanClaimedTasks,
+    runsWithoutClaimedTask,
+    next: [
+      ...(openTasks.length > 0 ? ["kforge agent plan . --agent <agent-a> --agent <agent-b> --json"] : []),
+      ...(orphanClaimedTasks.length > 0
+        ? orphanClaimedTasks.map((task) => `kforge run start . --task ${shellQuote(task.file)} --agent ${shellQuote(task.owner ?? "<agent>")} --json`)
+        : []),
+      ...(runsWithoutClaimedTask.length > 0
+        ? runsWithoutClaimedTask.map((run) => `kforge run inspect . --run ${shellQuote(run.file)} --json`)
+        : []),
+      "kforge task list . --status all --json",
+      "kforge run list . --status all --json",
+    ],
+  };
+
+  if (options.json) {
+    return { ok: true, messages: [JSON.stringify(payload, null, 2)] };
+  }
+
+  const lines = [
+    "# Agent Board",
+    "",
+    `Updated: ${today()}`,
+    "",
+    "## Counts",
+    "",
+    `- agents: ${payload.counts.agents}`,
+    `- open tasks: ${payload.counts.openTasks}`,
+    `- claimed tasks: ${payload.counts.claimedTasks}`,
+    `- done tasks: ${payload.counts.doneTasks}`,
+    `- running runs: ${payload.counts.runningRuns}`,
+    `- successful runs: ${payload.counts.successfulRuns}`,
+    `- failed runs: ${payload.counts.failedRuns}`,
+    `- orphan claimed tasks: ${payload.counts.orphanClaimedTasks}`,
+    `- runs without claimed task: ${payload.counts.runsWithoutClaimedTask}`,
+    "",
+    "## Agents",
+    "",
+    ...(agents.length > 0
+      ? [
+          "| Agent | Running Runs | Claimed Tasks | Next |",
+          "| --- | ---: | ---: | --- |",
+          ...agents.map((agent) => `| ${escapeTableCell(agent.agent)} | ${agent.runningRuns.length} | ${agent.claimedTasks.length} | \`${agent.next[0] ?? ""}\` |`),
+        ]
+      : ["No active agents found."]),
+    "",
+    "## Open Tasks",
+    "",
+    ...(openTasks.length > 0 ? openTasks.map((task) => `- \`${task.file}\` ${task.title}`) : ["No open tasks."]),
+    "",
+    "## Attention",
+    "",
+    ...(orphanClaimedTasks.length > 0 ? ["Claimed tasks without running runs:", ...orphanClaimedTasks.map((task) => `- \`${task.file}\` owner: ${task.owner ?? "-"}`)] : []),
+    ...(runsWithoutClaimedTask.length > 0 ? ["Running runs whose task is not currently claimed:", ...runsWithoutClaimedTask.map((run) => `- \`${run.file}\` task: \`${run.task}\``)] : []),
+    ...(orphanClaimedTasks.length === 0 && runsWithoutClaimedTask.length === 0 ? ["No coordination issues found."] : []),
     "",
     "## Next",
     "",

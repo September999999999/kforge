@@ -105,6 +105,7 @@ shell scripts can all understand.
 - promote useful outputs into reviewable wiki or claim updates
 - seed and claim review work as tasks so multiple agents can coordinate
 - pre-plan independent runs for several agents from the same review queue
+- inspect a shared agent board for active runs, claimed tasks, and gaps
 - record auditable agent runs with logs and success/failure status
 - run deterministic health checks and trust score reports
 - audit claim provenance, status, confidence, source drift, and review debt
@@ -143,6 +144,7 @@ tools that do not require an LLM provider:
 - generate agent task packs for LLM handoff
 - expose repo operations through a stdio MCP server
 - plan multiple independent agent runs from one review queue
+- inspect multi-agent board state and coordination gaps
 - run structural health checks for links and local source references
 - validate the `kb.yaml` protocol manifest
 - detect stale generated index files after repo changes
@@ -508,6 +510,8 @@ kforge agent draft [path] --agent <name> [--run <runs/file.md>] [--json]
                          create a compile draft for current work
 kforge agent status [path] --agent <name> [--json]
                          show current work for one agent
+kforge agent board [path] [--json]
+                         show active agents, runs, tasks, and coordination gaps
 kforge agent plan [path] --agent <name> --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]
                          assign independent runs to multiple agents
 kforge agent finish [path] --agent <name> [--run <runs/file.md>] [--status <success|failure>] [--task-done] [--note <text>] [--json]

@@ -42,6 +42,7 @@ test("mcp server exposes kforge tools over stdio", async () => {
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_step"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_draft"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_status"), true);
+    assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_board"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_plan"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_finish"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_compile"), true);
@@ -352,6 +353,23 @@ test("mcp server exposes kforge tools over stdio", async () => {
     assert.notEqual(agentPlanPayload.assignments?.[0]?.task?.file, agentPlanPayload.assignments?.[1]?.task?.file);
     assert.match(agentPlanPayload.assignments?.[0]?.commands?.join("\n") ?? "", /kforge agent draft/);
     assert.match(await readFile(path.join(repoPath, agentPlanPayload.assignments?.[0]?.run?.file ?? ""), "utf8"), /parallel plan/);
+
+    const agentBoardResult = await client.callTool({
+      name: "kforge_agent_board",
+      arguments: {
+        json: true,
+      },
+    });
+    const agentBoardPayload = JSON.parse(firstText(agentBoardResult.content)) as {
+      counts?: { agents?: number; runningRuns?: number; claimedTasks?: number };
+      agents?: Array<{ agent?: string }>;
+      next?: string[];
+    };
+    assert.equal((agentBoardPayload.counts?.agents ?? 0) >= 2, true);
+    assert.equal((agentBoardPayload.counts?.runningRuns ?? 0) >= 2, true);
+    assert.equal((agentBoardPayload.counts?.claimedTasks ?? 0) >= 2, true);
+    assert.equal(agentBoardPayload.agents?.some((agent) => agent.agent === "mcp-plan-a"), true);
+    assert.match(agentBoardPayload.next?.join("\n") ?? "", /task list/);
 
     const compile = await client.callTool({
       name: "kforge_compile",

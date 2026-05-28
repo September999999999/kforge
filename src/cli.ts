@@ -5,6 +5,7 @@ import path from "node:path";
 import { VERSION } from "./version.js";
 import {
   addSource,
+  agentBoard,
   agentDraft,
   agentFinish,
   agentPlan,
@@ -581,6 +582,13 @@ function runAgentCommand(args: string[]): CommandResult {
     return agentStatus(repoPath, { agent, json });
   }
 
+  if (subcommand === "board") {
+    const parsed = parseArgs(rest);
+    const repoPath = resolveRepoPath(parsed.positionals[0] ?? ".");
+    const json = flagOption(parsed.options, "json");
+    return agentBoard(repoPath, { json });
+  }
+
   if (subcommand === "plan") {
     const parsed = parseArgs(rest);
     const repoPath = resolveRepoPath(parsed.positionals[0] ?? ".");
@@ -633,7 +641,7 @@ function runAgentCommand(args: string[]): CommandResult {
   }
 
   throw new Error(
-    "Usage: kforge agent next [path] --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]\n       kforge agent step [path] --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]\n       kforge agent draft [path] --agent <name> [--run <runs/file.md>] [--json]\n       kforge agent status [path] --agent <name> [--json]\n       kforge agent plan [path] --agent <name> --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]\n       kforge agent finish [path] --agent <name> [--run <runs/file.md>] [--status <success|failure>] [--task-done] [--note <text>] [--json]\n       kforge agent list\n       kforge agent print [--template <agents|claude|cursor|generic>]\n       kforge agent install [path] [--template <agents|claude|cursor|generic>] [--force]",
+    "Usage: kforge agent next [path] --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]\n       kforge agent step [path] --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]\n       kforge agent draft [path] --agent <name> [--run <runs/file.md>] [--json]\n       kforge agent status [path] --agent <name> [--json]\n       kforge agent board [path] [--json]\n       kforge agent plan [path] --agent <name> --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]\n       kforge agent finish [path] --agent <name> [--run <runs/file.md>] [--status <success|failure>] [--task-done] [--note <text>] [--json]\n       kforge agent list\n       kforge agent print [--template <agents|claude|cursor|generic>]\n       kforge agent install [path] [--template <agents|claude|cursor|generic>] [--force]",
   );
 }
 
@@ -983,6 +991,7 @@ Usage:
   kforge agent draft [path] --agent <name> [--run <runs/file.md>] [--json]
                                                        create a compile draft for current work
   kforge agent status [path] --agent <name> [--json]    show current work for one agent
+  kforge agent board [path] [--json]                    show active agents, runs, tasks, and coordination gaps
   kforge agent plan [path] --agent <name> --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]
                                                        assign independent runs to multiple agents
   kforge agent finish [path] --agent <name> [--run <runs/file.md>] [--status <success|failure>] [--task-done] [--note <text>] [--json]

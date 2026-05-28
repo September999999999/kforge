@@ -3,6 +3,7 @@ export { createKforgeMcpServer, runMcpServer } from "./mcp.js";
 export {
   CANONICAL_DIRS,
   addSource,
+  agentBoard,
   agentDraft,
   agentFinish,
   agentPlan,
@@ -57,6 +58,9 @@ export {
   updateReviewStatus,
   workflowRepo,
   type AddSourceOptions,
+  type AgentBoardAgent,
+  type AgentBoardOptions,
+  type AgentBoardPayload,
   type AgentDraftOptions,
   type AgentDraftPayload,
   type AgentFinishOptions,

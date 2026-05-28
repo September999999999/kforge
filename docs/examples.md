@@ -303,6 +303,15 @@ for each assigned agent, starts one run per assignment, and returns the focused
 `agent step` command each worker should run next. Agents that could not be
 assigned are listed under `unassignedAgents`.
 
+Inspect the shared board while agents are working:
+
+```bash
+kforge agent board ./my-topic
+```
+
+The board highlights active agents, open tasks, claimed tasks without running
+runs, and running runs whose task is no longer claimed.
+
 For compile reviews, `kforge review next` shows the source, target, compile
 draft, and Proposed Content writeback commands to run next. The draft carries
 source metadata, source excerpts, and existing target context when available.

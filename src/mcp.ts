@@ -10,6 +10,7 @@ import * as z from "zod/v4";
 import { VERSION } from "./version.js";
 import {
   addSource,
+  agentBoard,
   agentDraft,
   agentFinish,
   agentPlan,
@@ -366,6 +367,20 @@ export function createKforgeMcpServer(options: McpOptions = {}): McpServer {
     },
     async ({ path: repoPath, agent, json }) =>
       runAsTool(() => agentStatus(toolRepoPath(defaultRepoPath, repoPath), { agent, json })),
+  );
+
+  server.registerTool(
+    "kforge_agent_board",
+    {
+      title: "Read agent board",
+      description: "Summarize active agents, running runs, claimed tasks, open tasks, and coordination gaps.",
+      inputSchema: z.object({
+        path: repoPathSchema,
+        json: z.boolean().optional(),
+      }),
+    },
+    async ({ path: repoPath, json }) =>
+      runAsTool(() => agentBoard(toolRepoPath(defaultRepoPath, repoPath), { json })),
   );
 
   server.registerTool(

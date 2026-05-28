@@ -511,6 +511,7 @@ kforge agent next . --agent agent-a --json
 kforge agent step . --agent agent-a --json
 kforge agent draft . --agent agent-a --json
 kforge agent status . --agent agent-a --json
+kforge agent board . --json
 kforge agent finish . --agent agent-a --status success --task-done --json
 kforge agent list
 kforge agent print --template claude
@@ -525,6 +526,9 @@ task, focused read refs, suggested commands, and finish command.
 running review task, then returns the review writeback and run-log commands.
 `agent status` shows the agent's running runs, claimed tasks, and suggested next
 commands.
+`agent board` shows shared multi-agent state: active agents, open tasks,
+running runs, claimed tasks without runs, and running runs whose task is no
+longer claimed.
 `agent finish` closes the current run for an agent and can mark the linked task
 done with `--task-done`.
 `run next` remains available as the lower-level task/run command.

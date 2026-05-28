@@ -54,6 +54,8 @@ accepts a `path` argument when an agent needs to operate on a different repo.
   review task; set `json` for the output ref and writeback commands
 - `kforge_agent_status`: summarize running runs, claimed tasks, and next
   commands for one agent
+- `kforge_agent_board`: summarize active agents, running runs, claimed tasks,
+  open tasks, and coordination gaps
 - `kforge_agent_plan`: assign independent review-backed tasks and start
   auditable runs for multiple agents in one deterministic pass
 - `kforge_agent_finish`: finish one agent's current run and optionally mark the

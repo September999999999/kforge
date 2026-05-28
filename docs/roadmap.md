@@ -82,6 +82,8 @@ Goal: make the protocol usable from common AI and PKM environments.
 - task seeding, next-task claiming, completion, and release for parallel agent
   runs, including JSON and MCP tools
 - multi-agent run planning from one review queue, including JSON and MCP tools
+- multi-agent board state with active runs, claimed tasks, and coordination gap
+  detection
 - auditable run records with next/start/log/finish lifecycle, success/failure
   state, JSON output, and MCP tools
 - high-level agent draft loop with `agent next`, `agent step`, `agent draft`,

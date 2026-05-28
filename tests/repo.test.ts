@@ -5,6 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   addSource,
+  agentBoard,
   agentDraft,
   agentFinish,
   agentPlan,
@@ -58,6 +59,7 @@ import {
   updateReviewContent,
   updateReviewStatus,
   workflowRepo,
+  type AgentBoardPayload,
   type AgentDraftPayload,
   type AgentFinishPayload,
   type AgentPlanPayload,
@@ -1138,6 +1140,54 @@ test("agent plan assigns independent runs for multiple agents", async () => {
     ) as AgentPlanPayload;
     assert.equal(secondPlan.started, 0);
     assert.deepEqual(secondPlan.unassignedAgents, ["agent-c"]);
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test("agent board summarizes active multi-agent coordination", async () => {
+  const repoPath = await tempRepoPath();
+  try {
+    initRepo(repoPath);
+    await writeFile(path.join(repoPath, "raw", "source.md"), "# Source\n", "utf8");
+    createReview(repoPath, {
+      title: "Board Run",
+      targets: ["wiki/Board Run.md"],
+      sources: ["raw/source.md"],
+      kind: "compile",
+    });
+    createReview(repoPath, {
+      title: "Board Claimed",
+      targets: ["wiki/Board Claimed.md"],
+      sources: ["raw/source.md"],
+      kind: "compile",
+    });
+    createReview(repoPath, {
+      title: "Board Open",
+      targets: ["wiki/Board Open.md"],
+      sources: ["raw/source.md"],
+      kind: "compile",
+    });
+
+    const plan = JSON.parse(agentPlan(repoPath, { agents: ["board-agent"], limit: 1, json: true }).messages[0]) as AgentPlanPayload;
+    const claimedOnly = JSON.parse(nextTask(repoPath, { agent: "waiting-agent", json: true }).messages[0]) as TaskNextPayload;
+    assert.ok(plan.assignments[0]);
+    assert.ok(claimedOnly.task);
+    await writeFile(path.join(repoPath, plan.assignments[0].task.file), await readFile(path.join(repoPath, plan.assignments[0].task.file), "utf8").then((text) => text.replace("Status: claimed", "Status: done")), "utf8");
+
+    const board = JSON.parse(agentBoard(repoPath, { json: true }).messages[0]) as AgentBoardPayload;
+
+    assert.equal(board.counts.agents, 2);
+    assert.equal(board.counts.runningRuns, 1);
+    assert.equal(board.counts.claimedTasks, 1);
+    assert.equal(board.counts.openTasks, 1);
+    assert.equal(board.counts.orphanClaimedTasks, 1);
+    assert.equal(board.counts.runsWithoutClaimedTask, 1);
+    assert.equal(board.orphanClaimedTasks[0]?.owner, "waiting-agent");
+    assert.equal(board.runsWithoutClaimedTask[0]?.agent, "board-agent");
+    assert.match(board.agents.find((agent) => agent.agent === "board-agent")?.next.join("\n") ?? "", /agent step/);
+    assert.match(board.next.join("\n"), /agent plan|run start|run inspect/);
+    assert.match(agentBoard(repoPath).messages[0], /# Agent Board/);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }

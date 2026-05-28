@@ -22,6 +22,7 @@ test("cli help exposes the public command surface", async () => {
   assert.match(result.stdout, /kforge agent step \[path\].*--agent <name>.*\[--json\]/);
   assert.match(result.stdout, /kforge agent draft \[path\].*--agent <name>.*\[--json\]/);
   assert.match(result.stdout, /kforge agent status \[path\].*--agent <name>.*\[--json\]/);
+  assert.match(result.stdout, /kforge agent board \[path\] \[--json\]/);
   assert.match(result.stdout, /kforge agent plan \[path\].*--agent <name>.*--agent <name>.*\[--json\]/);
   assert.match(result.stdout, /kforge agent finish \[path\].*--agent <name>.*\[--task-done\].*\[--json\]/);
   assert.match(result.stdout, /kforge agent list/);
@@ -300,6 +301,19 @@ test("cli agent plan assigns multiple agent runs", async () => {
     assert.match(payload.assignments?.[0]?.commands?.join("\n") ?? "", /kforge agent draft/);
     assert.match(payload.next?.join("\n") ?? "", /kforge agent step/);
     assert.match(await readFile(path.join(repoPath, payload.assignments?.[0]?.run?.file ?? ""), "utf8"), /parallel/);
+
+    const board = await runCli(["agent", "board", repoPath, "--json"]);
+    const boardPayload = JSON.parse(board.stdout) as {
+      counts?: { agents?: number; runningRuns?: number; claimedTasks?: number };
+      agents?: Array<{ agent?: string; runningRuns?: unknown[]; claimedTasks?: unknown[] }>;
+      next?: string[];
+    };
+    assert.equal(board.exitCode, 0);
+    assert.equal(boardPayload.counts?.agents, 2);
+    assert.equal(boardPayload.counts?.runningRuns, 2);
+    assert.equal(boardPayload.counts?.claimedTasks, 2);
+    assert.equal(boardPayload.agents?.[0]?.agent, "cli-plan-a");
+    assert.match(boardPayload.next?.join("\n") ?? "", /task list/);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }

@@ -241,6 +241,15 @@ kforge agent plan ./my-topic \
 Each assignment gets a distinct claimed task, a `runs/` log, focused read refs,
 and the next `agent step` command for that worker.
 
+Check the shared board when several agents are active:
+
+```bash
+kforge agent board ./my-topic --json
+```
+
+The board shows active agents, open tasks, running runs, claimed tasks without
+runs, and running runs whose task is no longer claimed.
+
 The draft includes source metadata, source excerpts, and existing target
 context. Edit it before attaching it back to the review.
 Replace the draft TODOs before accepting; `kforge doctor` and `kforge review

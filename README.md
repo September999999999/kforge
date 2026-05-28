@@ -103,6 +103,8 @@ shell scripts can all understand.
   without calling a model
 - stage broad or risky changes through review artifacts
 - promote useful outputs into reviewable wiki or claim updates
+- bootstrap a newly ingested research repo into compile reviews, seeded tasks,
+  refreshed indexes, and optional agent runs
 - seed and claim review work as tasks so multiple agents can coordinate
 - pre-plan independent runs for several agents from the same review queue
 - inspect a shared agent board for active runs, claimed tasks, and gaps
@@ -136,6 +138,8 @@ tools that do not require an LLM provider:
   automation
 - stage queued raw sources as proposed compile reviews, including JSON output
   for automation
+- bootstrap queued source material into reviews, tasks, refreshed dashboards,
+  and optional multi-agent run assignments
 - generate source-to-wiki compile briefs for LLM handoff
 - generate provider-neutral answer packs for questions
 - print or write trust score reports
@@ -249,6 +253,18 @@ kforge pack . --task "Explain the demo repo" --query provenance --file wiki/Prov
 kforge doctor .
 ```
 
+For a fresh research repo with raw sources waiting to be compiled, start the
+review-first pipeline in one pass:
+
+```bash
+kforge bootstrap . --dry-run --json
+kforge bootstrap . --agent agent-a --agent agent-b --json
+```
+
+`bootstrap` stages queued raw sources as compile reviews, refreshes deterministic
+indexes, seeds review-backed tasks, and optionally starts one auditable run per
+agent. It does not write compiled wiki pages directly.
+
 See [docs/quickstart.md](docs/quickstart.md) for the guided overview, or the
 [ten-minute walkthrough](docs/examples.md#ten-minute-agent-draft-walkthrough)
 for a concrete task/run/draft/review/apply loop.
@@ -290,6 +306,20 @@ Automation can add `--json` to `source add`, `source fetch`,
 `source fetch-list`, or `source import` to get the created `raw/` and
 `raw/_meta/` paths, fetched response metadata, import counts, and dry-run plans
 as a single machine-readable payload.
+
+Start the research workflow from newly ingested raw sources:
+
+```bash
+kforge bootstrap ~/research/my-topic --dry-run --json
+kforge bootstrap ~/research/my-topic \
+  --agent agent-a \
+  --agent agent-b \
+  --json
+```
+
+This creates review artifacts for queued sources, refreshes repo status, seeds
+claimable tasks, and starts optional agent runs. The wiki still changes only
+after a draft is attached to a review, accepted, and applied.
 
 Create a source-grounded claim:
 
@@ -499,6 +529,8 @@ kforge init [path] [--force] [--example]
                          create a knowledge repo
 kforge demo [path] [--force]
                          create a ready-to-browse demo repo
+kforge bootstrap [path] [--agent <name>] [--limit <n>] [--dry-run] [--json]
+                         stage compile reviews, tasks, and optional agent runs
 kforge index [path]     generate source, wiki, claim, and review indexes
 kforge refresh [path]   refresh indexes and derived reports
 kforge doctor [path] [--write] [--json]

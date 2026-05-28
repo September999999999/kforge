@@ -32,6 +32,9 @@ accepts a `path` argument when an agent needs to operate on a different repo.
 - `kforge_init`: create the canonical repo layout
 - `kforge_demo`: create a ready-to-browse example repo
 - `kforge_index`: regenerate deterministic indexes
+- `kforge_bootstrap`: stage queued raw sources into compile reviews, refresh
+  deterministic repo status, seed tasks, and optionally start auditable agent
+  runs; it does not write compiled wiki pages directly
 - `kforge_refresh`: regenerate indexes and write context, workflow, doctor, and score reports
 - `kforge_source_add`: copy a local source into `raw/` with metadata; pass
   `json: true` for the same machine-readable ingest payload as

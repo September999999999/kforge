@@ -16,6 +16,7 @@ test("cli help exposes the public command surface", async () => {
   assert.equal(result.exitCode, 0);
   assert.match(result.stdout, /kforge 0\.1\.0/);
   assert.match(result.stdout, /kforge demo \[path\] \[--force\]/);
+  assert.match(result.stdout, /kforge bootstrap \[path\].*\[--agent <name>\].*\[--json\]/);
   assert.match(result.stdout, /kforge refresh \[path\]/);
   assert.match(result.stdout, /kforge doctor \[path\] \[--write\] \[--json\]/);
   assert.match(result.stdout, /kforge handoff \[path\] \[--write\]/);
@@ -330,6 +331,43 @@ test("cli agent plan assigns multiple agent runs", async () => {
     assert.equal(boardPayload.counts?.claimedTasks, 2);
     assert.equal(boardPayload.agents?.[0]?.agent, "cli-plan-a");
     assert.match(boardPayload.next?.join("\n") ?? "", /task list/);
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test("cli bootstrap stages research work for multiple agents", async () => {
+  const repoPath = await mkdtemp(path.join(tmpdir(), "kforge-cli-bootstrap-"));
+  try {
+    await runCli(["init", repoPath]);
+    await writeFile(path.join(repoPath, "raw", "one.md"), "# One\n", "utf8");
+    await writeFile(path.join(repoPath, "raw", "two.md"), "# Two\n", "utf8");
+
+    const dryRun = await runCli(["bootstrap", repoPath, "--dry-run", "--json"]);
+    const dryRunPayload = JSON.parse(dryRun.stdout) as {
+      dryRun?: boolean;
+      counts?: { compileReviewsWouldCreate?: number; tasksCreated?: number };
+    };
+    const result = await runCli(["bootstrap", repoPath, "--agent", "boot-a", "--agent", "boot-b", "--limit", "2", "--json"]);
+    const payload = JSON.parse(result.stdout) as {
+      dryRun?: boolean;
+      counts?: { compileReviewsCreated?: number; tasksCreated?: number; agentRunsStarted?: number };
+      agentPlan?: { assignments?: Array<{ agent?: string; run?: { file?: string } }> };
+      next?: string[];
+    };
+
+    assert.equal(dryRun.exitCode, 0);
+    assert.equal(dryRunPayload.dryRun, true);
+    assert.equal(dryRunPayload.counts?.compileReviewsWouldCreate, 2);
+    assert.equal(dryRunPayload.counts?.tasksCreated, 0);
+    assert.equal(result.exitCode, 0);
+    assert.equal(payload.dryRun, false);
+    assert.equal(payload.counts?.compileReviewsCreated, 2);
+    assert.equal(payload.counts?.tasksCreated, 2);
+    assert.equal(payload.counts?.agentRunsStarted, 2);
+    assert.equal(payload.agentPlan?.assignments?.[0]?.agent, "boot-a");
+    assert.match(payload.next?.join("\n") ?? "", /kforge agent step/);
+    assert.match(await readFile(path.join(repoPath, "indexes", "dashboard.md"), "utf8"), /# Knowledge Dashboard/);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }

@@ -17,6 +17,7 @@ import {
   applyReview,
   auditClaims,
   claimTask,
+  bootstrapRepo,
   compileDraftRepo,
   compilePlanRepo,
   compileReviewRepo,
@@ -70,6 +71,7 @@ import {
   type AgentPlanPayload,
   type AgentStatusPayload,
   type AgentStepPayload,
+  type BootstrapPayload,
   type SourceAddPayload,
   type CompileDraftPayload,
   type DashboardPayload,
@@ -238,6 +240,37 @@ test("refresh writes indexes and derived reports", async () => {
     assert.match(await readFile(path.join(repoPath, "indexes", "compile-plan.md"), "utf8"), /# Compile Plan/);
     assert.match(await readFile(path.join(repoPath, "indexes", "dashboard.md"), "utf8"), /# Knowledge Dashboard/);
     assert.match(await readFile(path.join(repoPath, "indexes", "doctor.md"), "utf8"), /Status: clean/);
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test("bootstrap stages queued sources into review tasks and agent runs", async () => {
+  const repoPath = await tempRepoPath();
+  try {
+    initRepo(repoPath);
+    await writeFile(path.join(repoPath, "raw", "one.md"), "# One\n", "utf8");
+    await writeFile(path.join(repoPath, "raw", "two.md"), "# Two\n", "utf8");
+
+    const dryRun = JSON.parse(bootstrapRepo(repoPath, { dryRun: true, json: true }).messages[0]) as BootstrapPayload;
+    const result = JSON.parse(
+      bootstrapRepo(repoPath, { agents: ["agent-a", "agent-b"], limit: 2, note: "start research", json: true }).messages[0],
+    ) as BootstrapPayload;
+
+    assert.equal(dryRun.dryRun, true);
+    assert.equal(dryRun.counts.queuedSources, 2);
+    assert.equal(dryRun.counts.compileReviewsWouldCreate, 2);
+    assert.equal(dryRun.counts.tasksCreated, 0);
+    assert.match(dryRun.next.join("\n"), /kforge bootstrap/);
+    assert.equal(result.dryRun, false);
+    assert.equal(result.counts.compileReviewsCreated, 2);
+    assert.equal(result.counts.tasksCreated, 2);
+    assert.equal(result.counts.agentsRequested, 2);
+    assert.equal(result.counts.agentRunsStarted, 2);
+    assert.equal(result.agentPlan?.assignments.length, 2);
+    assert.match(result.next.join("\n"), /kforge agent step/);
+    assert.match(await readFile(path.join(repoPath, result.agentPlan?.assignments[0]?.run.file ?? ""), "utf8"), /start research/);
+    assert.match(await readFile(path.join(repoPath, "indexes", "dashboard.md"), "utf8"), /# Knowledge Dashboard/);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }

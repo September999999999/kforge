@@ -180,6 +180,21 @@ Automation can append `--json` to `source add`, `source fetch`,
 `source fetch-list`, or `source import` to read the created raw paths, metadata
 paths, fetched response metadata, and import plan without parsing text output.
 
+After ingest, bootstrap the review-first research loop:
+
+```bash
+kforge bootstrap ./my-topic --dry-run --json
+
+kforge bootstrap ./my-topic \
+  --agent agent-a \
+  --agent agent-b \
+  --json
+```
+
+`bootstrap` stages queued raw sources into compile reviews, refreshes indexes
+and the dashboard, seeds review-backed tasks, and optionally starts one run per
+agent. It does not write compiled wiki pages directly.
+
 For durable assertions:
 
 ```bash

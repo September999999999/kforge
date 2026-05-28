@@ -19,6 +19,7 @@ import {
   auditClaims,
   askRepo,
   applyReview,
+  bootstrapRepo,
   claimTask,
   compileDraftRepo,
   compilePlanRepo,
@@ -135,6 +136,32 @@ export function createKforgeMcpServer(options: McpOptions = {}): McpServer {
       }),
     },
     async ({ path: repoPath }) => runAsTool(() => indexRepo(toolRepoPath(defaultRepoPath, repoPath))),
+  );
+
+  server.registerTool(
+    "kforge_bootstrap",
+    {
+      title: "Bootstrap research workflow",
+      description: "Stage queued sources into compile reviews, seed tasks, and optionally assign agent runs.",
+      inputSchema: z.object({
+        path: repoPathSchema,
+        agents: z.array(z.string().min(1)).optional(),
+        limit: z.number().int().positive().optional(),
+        dryRun: z.boolean().optional(),
+        note: z.string().optional(),
+        json: z.boolean().optional(),
+      }),
+    },
+    async ({ path: repoPath, agents, limit, dryRun, note, json }) =>
+      runAsTool(() =>
+        bootstrapRepo(toolRepoPath(defaultRepoPath, repoPath), {
+          agents,
+          limit,
+          dryRun,
+          note,
+          json,
+        }),
+      ),
   );
 
   server.registerTool(

@@ -15,6 +15,7 @@ import {
   askRepo,
   applyReview,
   claimTask,
+  bootstrapRepo,
   compileDraftRepo,
   compilePlanRepo,
   compileReviewRepo,
@@ -76,6 +77,7 @@ import {
 type Command =
   | "init"
   | "demo"
+  | "bootstrap"
   | "index"
   | "refresh"
   | "doctor"
@@ -177,6 +179,23 @@ function runRepoCommand(
 
   if (command === "demo") {
     return demoRepo(repoPath, { force });
+  }
+
+  if (command === "bootstrap") {
+    const parsed = parseArgs(args);
+    const bootstrapRepoPath = resolveRepoPath(parsed.positionals[0] ?? ".");
+    const agents = manyOptions(parsed.options, "agent");
+    const limitValue = oneOption(parsed.options, "limit", false);
+    const dryRun = flagOption(parsed.options, "dry-run");
+    const note = oneOption(parsed.options, "note", false);
+    const bootstrapJson = flagOption(parsed.options, "json");
+    return bootstrapRepo(bootstrapRepoPath, {
+      agents,
+      limit: limitValue ? parsePositiveInteger(limitValue, "--limit") : undefined,
+      dryRun,
+      note,
+      json: bootstrapJson,
+    });
   }
 
   if (command === "index") {
@@ -990,6 +1009,7 @@ function isCommand(value: string): value is Command {
   return (
     value === "init" ||
     value === "demo" ||
+    value === "bootstrap" ||
     value === "index" ||
     value === "refresh" ||
     value === "doctor" ||
@@ -1022,6 +1042,8 @@ function printHelp(): void {
 Usage:
   kforge init [path] [--force] [--example]             create a knowledge repo
   kforge demo [path] [--force]                         create a ready-to-browse demo repo
+  kforge bootstrap [path] [--agent <name>] [--limit <n>] [--dry-run] [--json]
+                                                       stage compile reviews, tasks, and optional agent runs
   kforge index [path]                                  generate inventory files
   kforge refresh [path]                                refresh indexes and derived reports
   kforge doctor [path] [--write] [--json]              run health checks

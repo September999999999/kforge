@@ -273,6 +273,22 @@ kforge compile plan ./my-topic
 kforge compile review ./my-topic --limit 3
 ```
 
+Or use the startup pipeline after ingest:
+
+```bash
+kforge bootstrap ./my-topic --dry-run --json
+
+kforge bootstrap ./my-topic \
+  --agent agent-a \
+  --agent agent-b \
+  --json
+```
+
+`bootstrap` stages queued sources as compile reviews, refreshes the repo
+dashboard, seeds tasks, and starts optional agent runs. It deliberately stops
+before writing `wiki/`; drafts still need to be attached to reviews, accepted,
+and applied.
+
 Ask a question and save an answer pack:
 
 ```bash

@@ -36,6 +36,8 @@ Goal: let an LLM agent compile new source material into reviewable wiki changes.
   for automation
 - queued source staging through `kforge compile review`, including JSON output
   for automation
+- research bootstrap pipeline through `kforge bootstrap` for review staging,
+  refresh, task seeding, and optional agent run assignment after ingest
 - manual review artifact generation
 - Proposed Content writeback through `kforge review content`, including JSON
   output for automation

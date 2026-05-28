@@ -53,6 +53,14 @@ export interface HandoffOptions {
   write?: boolean;
 }
 
+export interface BootstrapOptions {
+  agents?: string[];
+  limit?: number;
+  dryRun?: boolean;
+  note?: string;
+  json?: boolean;
+}
+
 export interface AddSourceOptions {
   file: string;
   title?: string;
@@ -244,6 +252,27 @@ export interface DashboardPayload {
   };
   next: string[];
   links: Array<{ label: string; file: string }>;
+}
+
+export interface BootstrapPayload {
+  ok: true;
+  dryRun: boolean;
+  updatedAt: string;
+  counts: {
+    queuedSources: number;
+    compileReviewsCreated: number;
+    compileReviewsWouldCreate: number;
+    compileReviewsSkipped: number;
+    tasksCreated: number;
+    taskSeedsSkipped: number;
+    agentsRequested: number;
+    agentRunsStarted: number;
+  };
+  refresh?: string[];
+  compileReview: CompileReviewPayload;
+  taskSeed?: TaskSeedPayload;
+  agentPlan?: AgentPlanPayload;
+  next: string[];
 }
 
 export interface ScoreOptions {
@@ -673,6 +702,19 @@ export interface CompileReviewItem {
   review?: string;
 }
 
+export interface CompileReviewPayload {
+  ok: true;
+  dryRun: boolean;
+  updatedAt: string;
+  counts: {
+    candidates: number;
+    wouldCreate: number;
+    created: number;
+    skipped: number;
+  };
+  items: CompileReviewItem[];
+}
+
 export interface CompileDraftOptions {
   review?: string;
   sources?: string[];
@@ -991,6 +1033,70 @@ export function refreshRepo(repoPath: string): CommandResult {
   ];
 
   return { ok, messages };
+}
+
+export function bootstrapRepo(repoPath: string, options: BootstrapOptions = {}): CommandResult {
+  requireRepo(repoPath);
+
+  const agents = [...new Set((options.agents ?? []).map((agent) => agent.trim()).filter(Boolean))];
+  const queuedSources = compilePlanCandidates(repoPath).filter((candidate) => candidate.status === "queued").length;
+  const compileReviewResult = compileReviewRepo(repoPath, {
+    limit: options.limit,
+    dryRun: options.dryRun,
+    json: true,
+  });
+  if (!compileReviewResult.ok) {
+    return compileReviewResult;
+  }
+
+  const compileReview = JSON.parse(compileReviewResult.messages[0]) as CompileReviewPayload;
+  if (options.dryRun) {
+    const payload = bootstrapPayload({
+      dryRun: true,
+      queuedSources,
+      compileReview,
+      agents,
+    });
+    return bootstrapResult(payload, options.json);
+  }
+
+  const refreshResult = refreshRepo(repoPath);
+  if (!refreshResult.ok) {
+    return refreshResult;
+  }
+
+  const taskSeedLimit = agents.length > 0 ? Math.max(options.limit ?? agents.length, agents.length) : options.limit;
+  const taskSeedResult = seedTasks(repoPath, { limit: taskSeedLimit, json: true });
+  if (!taskSeedResult.ok) {
+    return taskSeedResult;
+  }
+  const taskSeed = JSON.parse(taskSeedResult.messages[0]) as TaskSeedPayload;
+
+  let agentPlanPayload: AgentPlanPayload | undefined;
+  if (agents.length > 0) {
+    const agentPlanResult = agentPlan(repoPath, {
+      agents,
+      seed: false,
+      limit: options.limit,
+      note: options.note,
+      json: true,
+    });
+    if (!agentPlanResult.ok) {
+      return agentPlanResult;
+    }
+    agentPlanPayload = JSON.parse(agentPlanResult.messages[0]) as AgentPlanPayload;
+  }
+
+  const payload = bootstrapPayload({
+    dryRun: false,
+    queuedSources,
+    compileReview,
+    taskSeed,
+    agentPlan: agentPlanPayload,
+    agents,
+    refresh: refreshResult.messages,
+  });
+  return bootstrapResult(payload, options.json);
 }
 
 export function dashboardRepo(repoPath: string, options: DashboardOptions = {}): CommandResult {
@@ -3730,6 +3836,106 @@ function dashboardPayload(repoPath: string): DashboardPayload {
       { label: "Reviews", file: "indexes/review-index.md" },
     ],
   };
+}
+
+function bootstrapPayload(input: {
+  dryRun: boolean;
+  queuedSources: number;
+  compileReview: CompileReviewPayload;
+  taskSeed?: TaskSeedPayload;
+  agentPlan?: AgentPlanPayload;
+  agents: string[];
+  refresh?: string[];
+}): BootstrapPayload {
+  return {
+    ok: true,
+    dryRun: input.dryRun,
+    updatedAt: today(),
+    counts: {
+      queuedSources: input.queuedSources,
+      compileReviewsCreated: input.compileReview.counts.created,
+      compileReviewsWouldCreate: input.compileReview.counts.wouldCreate,
+      compileReviewsSkipped: input.compileReview.counts.skipped,
+      tasksCreated: input.taskSeed?.counts.created ?? 0,
+      taskSeedsSkipped: input.taskSeed?.counts.skippedExisting ?? 0,
+      agentsRequested: input.agents.length,
+      agentRunsStarted: input.agentPlan?.started ?? 0,
+    },
+    ...(input.refresh ? { refresh: input.refresh } : {}),
+    compileReview: input.compileReview,
+    ...(input.taskSeed ? { taskSeed: input.taskSeed } : {}),
+    ...(input.agentPlan ? { agentPlan: input.agentPlan } : {}),
+    next: bootstrapNextCommands(input),
+  };
+}
+
+function bootstrapResult(payload: BootstrapPayload, json: boolean | undefined): CommandResult {
+  if (json) {
+    return { ok: true, messages: [JSON.stringify(payload, null, 2)] };
+  }
+
+  const lines = [
+    "# Research Bootstrap",
+    "",
+    `Updated: ${payload.updatedAt}`,
+    `Dry run: ${payload.dryRun ? "yes" : "no"}`,
+    "",
+    "## Counts",
+    "",
+    `- queued sources: ${payload.counts.queuedSources}`,
+    `- compile reviews created: ${payload.counts.compileReviewsCreated}`,
+    `- compile reviews would create: ${payload.counts.compileReviewsWouldCreate}`,
+    `- compile reviews skipped: ${payload.counts.compileReviewsSkipped}`,
+    `- tasks created: ${payload.counts.tasksCreated}`,
+    `- task seeds skipped: ${payload.counts.taskSeedsSkipped}`,
+    `- agents requested: ${payload.counts.agentsRequested}`,
+    `- agent runs started: ${payload.counts.agentRunsStarted}`,
+    "",
+    "## Compile Reviews",
+    "",
+    ...(payload.compileReview.items.length > 0
+      ? payload.compileReview.items.map((item) => `- ${item.action}: \`${item.source}\` -> \`${item.target}\`${item.review ? ` (${item.review})` : ""}`)
+      : ["No queued compile reviews."]),
+    "",
+    "## Agent Assignments",
+    "",
+    ...(payload.agentPlan?.assignments.length
+      ? payload.agentPlan.assignments.map((assignment) => `- ${assignment.agent}: \`${assignment.task.file}\` -> \`${assignment.run.file}\``)
+      : ["No agent runs started."]),
+    "",
+    "## Next",
+    "",
+    ...payload.next.map((command) => `- \`${command}\``),
+    "",
+  ];
+
+  return { ok: true, messages: [lines.join("\n")] };
+}
+
+function bootstrapNextCommands(input: {
+  dryRun: boolean;
+  compileReview: CompileReviewPayload;
+  taskSeed?: TaskSeedPayload;
+  agentPlan?: AgentPlanPayload;
+  agents: string[];
+}): string[] {
+  if (input.dryRun) {
+    return ["kforge bootstrap . --json", "kforge compile review . --limit 3 --json"];
+  }
+
+  if (input.agentPlan?.assignments.length) {
+    return input.agentPlan.assignments.map((assignment) => `kforge agent step . --agent ${shellQuote(assignment.agent)} --json`);
+  }
+
+  if (input.agents.length === 0 && (input.taskSeed?.counts.created ?? 0) > 0) {
+    return ["kforge agent plan . --agent <agent-a> --agent <agent-b> --json", "kforge task list . --status open --json"];
+  }
+
+  if ((input.compileReview.counts.created + input.compileReview.counts.skipped) > 0) {
+    return ["kforge task seed . --json", "kforge review queue . --json"];
+  }
+
+  return ["kforge source fetch-list . --file <urls.txt> --dry-run", "kforge source import . --dir <local-dir> --dry-run"];
 }
 
 function dashboardReport(payload: DashboardPayload): string {

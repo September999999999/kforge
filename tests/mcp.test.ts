@@ -34,6 +34,7 @@ test("mcp server exposes kforge tools over stdio", async () => {
 
     const tools = await client.listTools();
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_demo"), true);
+    assert.equal(tools.tools.some((tool) => tool.name === "kforge_bootstrap"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_add"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_fetch"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_fetch_list"), true);
@@ -190,6 +191,21 @@ test("mcp server exposes kforge tools over stdio", async () => {
 
     const sourceList = await client.callTool({ name: "kforge_source_list", arguments: {} });
     assert.match(firstText(sourceList.content), /raw\/mcp-source.md/);
+
+    const bootstrapDryRun = await client.callTool({
+      name: "kforge_bootstrap",
+      arguments: {
+        dryRun: true,
+        json: true,
+      },
+    });
+    const bootstrapDryRunPayload = JSON.parse(firstText(bootstrapDryRun.content)) as {
+      dryRun?: boolean;
+      counts?: { compileReviewsWouldCreate?: number; tasksCreated?: number };
+    };
+    assert.equal(bootstrapDryRunPayload.dryRun, true);
+    assert.equal((bootstrapDryRunPayload.counts?.compileReviewsWouldCreate ?? 0) >= 1, true);
+    assert.equal(bootstrapDryRunPayload.counts?.tasksCreated, 0);
 
     const importDir = path.join(path.dirname(sourcePath), "bulk");
     await import("node:fs/promises").then((fs) => fs.mkdir(importDir, { recursive: true }));

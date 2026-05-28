@@ -246,6 +246,14 @@ It does not call an LLM provider and does not rewrite `raw/`, `wiki/`,
 Obsidian-friendly `indexes/dashboard.md` entry point with health, work queue,
 agent board, and index links.
 
+`kforge bootstrap` is the deterministic startup pipeline for a newly ingested
+research repo. It runs the review-first setup steps in order: stage queued raw
+sources with `compile review`, refresh indexes and the dashboard, seed tasks
+from the review queue, and optionally start one auditable run per requested
+agent. It can be previewed with `--dry-run --json`. Like the lower-level
+commands it composes, it does not call a model and does not write compiled
+`wiki/` pages directly.
+
 ### `AGENTS.md`
 
 Tells LLM agents how to safely read, write, compile, and review the repo.
@@ -652,6 +660,8 @@ kforge compile plan . --json
 kforge compile review . --dry-run
 kforge compile review . --dry-run --json
 kforge compile review . --limit 3
+kforge bootstrap . --dry-run --json
+kforge bootstrap . --agent agent-a --agent agent-b --json
 kforge compile draft . --review reviews/2026-05-28-compile-article.md --write
 kforge compile draft . --review reviews/2026-05-28-compile-article.md --write --json
 ```
@@ -807,15 +817,18 @@ agent handoff. With `--json`, stdout becomes a machine-readable object with
 1. **Ingest**: put source material into `raw/` with `kforge source add`, `kforge source fetch`, `kforge source import`, or a manual copy.
 2. **Inventory**: update `indexes/source-inventory.md`.
 3. **Plan**: run `kforge compile plan` to route uncovered raw sources.
-4. **Stage Reviews**: run `kforge compile review` to queue proposed compile work.
-5. **Compile**: create or update `wiki/` pages with source-grounded synthesis.
-6. **Extract Claims**: promote important assertions into `claims/`.
-7. **Review**: put risky changes or unresolved conflicts into `reviews/`.
-8. **Query**: answer questions using `raw/`, `wiki/`, `claims/`, and `indexes/`.
-9. **File Output**: save useful answers into `outputs/`, then run
+4. **Bootstrap**: optionally run `kforge bootstrap` to stage compile reviews,
+   refresh indexes, seed tasks, and start agent runs from the queue.
+5. **Stage Reviews**: run `kforge compile review` directly when you want the
+   lower-level queueing step without task or run setup.
+6. **Compile**: create or update `wiki/` pages with source-grounded synthesis.
+7. **Extract Claims**: promote important assertions into `claims/`.
+8. **Review**: put risky changes or unresolved conflicts into `reviews/`.
+9. **Query**: answer questions using `raw/`, `wiki/`, `claims/`, and `indexes/`.
+10. **File Output**: save useful answers into `outputs/`, then run
    `kforge promote` to stage durable knowledge as a review before filing it
    into `wiki/` or `claims/`.
-10. **Doctor**: run health checks for structure, links, sources, and review debt.
+11. **Doctor**: run health checks for structure, links, sources, and review debt.
 
 ## Non-Goals
 

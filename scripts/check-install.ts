@@ -134,8 +134,8 @@ async function main(): Promise<void> {
       files?: string[];
       bin?: Record<string, string>;
     };
-    expect(installedPackage.bin?.kforge === "./dist/src/cli.js", "installed package should expose the kforge bin");
-    expect(installedPackage.bin?.["kforge-mcp"] === "./dist/src/mcp.js", "installed package should expose the kforge-mcp bin");
+    expect(installedPackage.bin?.kforge === "dist/src/cli.js", "installed package should expose the kforge bin");
+    expect(installedPackage.bin?.["kforge-mcp"] === "dist/src/mcp.js", "installed package should expose the kforge-mcp bin");
 
     console.log("Install check passed: packed kforge installs into a clean project and the installed CLI/API run the demo agent loop.");
   } finally {

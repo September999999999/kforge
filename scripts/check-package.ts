@@ -167,8 +167,8 @@ async function main(): Promise<void> {
   expect(Boolean(packageJson.packageManager?.startsWith("npm@")), "packageManager must pin npm", issues);
   expect(packageJson.publishConfig?.access === "public", "publishConfig.access must be public", issues);
   expect(packageJson.engines?.node === ">=20", "engines.node must be >=20", issues);
-  expect(packageJson.bin?.kforge === "./dist/src/cli.js", "bin.kforge must point to dist/src/cli.js", issues);
-  expect(packageJson.bin?.["kforge-mcp"] === "./dist/src/mcp.js", "bin.kforge-mcp must point to dist/src/mcp.js", issues);
+  expect(packageJson.bin?.kforge === "dist/src/cli.js", "bin.kforge must point to dist/src/cli.js", issues);
+  expect(packageJson.bin?.["kforge-mcp"] === "dist/src/mcp.js", "bin.kforge-mcp must point to dist/src/mcp.js", issues);
 
   const exportsRoot = packageJson.exports?.["."] as { import?: string; types?: string } | undefined;
   expect(exportsRoot?.import === "./dist/src/index.js", "exports[\".\"].import must point to dist/src/index.js", issues);

@@ -81,6 +81,7 @@ Goal: make the protocol usable from common AI and PKM environments.
 - stdio `kforge-mcp` server wrapping current CLI operations
 - task seeding, next-task claiming, completion, and release for parallel agent
   runs, including JSON and MCP tools
+- multi-agent run planning from one review queue, including JSON and MCP tools
 - auditable run records with next/start/log/finish lifecycle, success/failure
   state, JSON output, and MCP tools
 - high-level agent draft loop with `agent next`, `agent step`, `agent draft`,

@@ -42,6 +42,7 @@ test("mcp server exposes kforge tools over stdio", async () => {
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_step"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_draft"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_status"), true);
+    assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_plan"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_finish"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_compile"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_compile_plan"), true);
@@ -310,6 +311,47 @@ test("mcp server exposes kforge tools over stdio", async () => {
     assert.equal(agentFinishPayload.run?.file, agentNextPayload.run?.file);
     assert.equal(agentFinishPayload.task?.status, "done");
     assert.equal(agentFinishPayload.task?.file, agentNextPayload.task?.file);
+
+    await client.callTool({
+      name: "kforge_review_new",
+      arguments: {
+        title: "MCP parallel one",
+        targets: ["wiki/MCP Parallel One.md"],
+        sources: ["raw/llm-knowledge-bases.md"],
+        kind: "compile",
+      },
+    });
+    await client.callTool({
+      name: "kforge_review_new",
+      arguments: {
+        title: "MCP parallel two",
+        targets: ["wiki/MCP Parallel Two.md"],
+        sources: ["raw/llm-knowledge-bases.md"],
+        kind: "compile",
+      },
+    });
+    const agentPlanResult = await client.callTool({
+      name: "kforge_agent_plan",
+      arguments: {
+        agents: ["mcp-plan-a", "mcp-plan-b"],
+        note: "parallel plan",
+        json: true,
+      },
+    });
+    const agentPlanPayload = JSON.parse(firstText(agentPlanResult.content)) as {
+      requested?: number;
+      started?: number;
+      assignments?: Array<{ agent?: string; task?: { file?: string; owner?: string }; run?: { file?: string; agent?: string }; commands?: string[] }>;
+      unassignedAgents?: string[];
+    };
+    assert.equal(agentPlanPayload.requested, 2);
+    assert.equal(agentPlanPayload.started, 2);
+    assert.deepEqual(agentPlanPayload.unassignedAgents, []);
+    assert.equal(agentPlanPayload.assignments?.[0]?.task?.owner, "mcp-plan-a");
+    assert.equal(agentPlanPayload.assignments?.[1]?.run?.agent, "mcp-plan-b");
+    assert.notEqual(agentPlanPayload.assignments?.[0]?.task?.file, agentPlanPayload.assignments?.[1]?.task?.file);
+    assert.match(agentPlanPayload.assignments?.[0]?.commands?.join("\n") ?? "", /kforge agent draft/);
+    assert.match(await readFile(path.join(repoPath, agentPlanPayload.assignments?.[0]?.run?.file ?? ""), "utf8"), /parallel plan/);
 
     const compile = await client.callTool({
       name: "kforge_compile",
@@ -613,7 +655,10 @@ test("mcp server exposes kforge tools over stdio", async () => {
         json: true,
       },
     });
-    assert.equal(JSON.parse(firstText(runList.content)).items[0].file, runFile);
+    assert.equal(
+      JSON.parse(firstText(runList.content)).items.some((item: { file?: string }) => item.file === runFile),
+      true,
+    );
 
     const runLog = await client.callTool({
       name: "kforge_run_log",

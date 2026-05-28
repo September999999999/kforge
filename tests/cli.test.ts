@@ -22,6 +22,7 @@ test("cli help exposes the public command surface", async () => {
   assert.match(result.stdout, /kforge agent step \[path\].*--agent <name>.*\[--json\]/);
   assert.match(result.stdout, /kforge agent draft \[path\].*--agent <name>.*\[--json\]/);
   assert.match(result.stdout, /kforge agent status \[path\].*--agent <name>.*\[--json\]/);
+  assert.match(result.stdout, /kforge agent plan \[path\].*--agent <name>.*--agent <name>.*\[--json\]/);
   assert.match(result.stdout, /kforge agent finish \[path\].*--agent <name>.*\[--task-done\].*\[--json\]/);
   assert.match(result.stdout, /kforge agent list/);
   assert.match(result.stdout, /kforge agent install \[path\]/);
@@ -230,6 +231,75 @@ test("cli agent next starts the next auditable run", async () => {
     assert.equal(finishedPayload.task?.status, "done");
     assert.equal(finishedPayload.task?.file, payload.task?.file);
     assert.match(finishedPayload.next?.[0] ?? "", /^kforge agent status/);
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test("cli agent plan assigns multiple agent runs", async () => {
+  const repoPath = await mkdtemp(path.join(tmpdir(), "kforge-cli-agent-plan-"));
+  try {
+    await runCli(["init", repoPath]);
+    await writeFile(path.join(repoPath, "raw", "source.md"), "# Source\n", "utf8");
+    await runCli([
+      "review",
+      "new",
+      repoPath,
+      "--title",
+      "CLI Parallel One",
+      "--target",
+      "wiki/CLI Parallel One.md",
+      "--source",
+      "raw/source.md",
+      "--kind",
+      "compile",
+    ]);
+    await runCli([
+      "review",
+      "new",
+      repoPath,
+      "--title",
+      "CLI Parallel Two",
+      "--target",
+      "wiki/CLI Parallel Two.md",
+      "--source",
+      "raw/source.md",
+      "--kind",
+      "compile",
+    ]);
+
+    const plan = await runCli([
+      "agent",
+      "plan",
+      repoPath,
+      "--agent",
+      "cli-plan-a",
+      "--agent",
+      "cli-plan-b",
+      "--note",
+      "parallel",
+      "--json",
+    ]);
+    const payload = JSON.parse(plan.stdout) as {
+      requested?: number;
+      started?: number;
+      assignments?: Array<{ agent?: string; task?: { file?: string; owner?: string }; run?: { file?: string; agent?: string }; commands?: string[] }>;
+      unassignedAgents?: string[];
+      next?: string[];
+    };
+
+    assert.equal(plan.exitCode, 0);
+    assert.equal(payload.requested, 2);
+    assert.equal(payload.started, 2);
+    assert.deepEqual(payload.unassignedAgents, []);
+    assert.equal(payload.assignments?.[0]?.agent, "cli-plan-a");
+    assert.equal(payload.assignments?.[1]?.agent, "cli-plan-b");
+    assert.equal(payload.assignments?.[0]?.task?.owner, "cli-plan-a");
+    assert.equal(payload.assignments?.[1]?.run?.agent, "cli-plan-b");
+    assert.notEqual(payload.assignments?.[0]?.task?.file, payload.assignments?.[1]?.task?.file);
+    assert.match(payload.assignments?.[0]?.commands?.join("\n") ?? "", /kforge agent draft/);
+    assert.match(payload.next?.join("\n") ?? "", /kforge agent step/);
+    assert.match(await readFile(path.join(repoPath, payload.assignments?.[0]?.run?.file ?? ""), "utf8"), /parallel/);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }

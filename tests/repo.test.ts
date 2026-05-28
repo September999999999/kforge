@@ -7,6 +7,7 @@ import {
   addSource,
   agentDraft,
   agentFinish,
+  agentPlan,
   agentStatus,
   agentStep,
   askRepo,
@@ -59,6 +60,7 @@ import {
   workflowRepo,
   type AgentDraftPayload,
   type AgentFinishPayload,
+  type AgentPlanPayload,
   type AgentStatusPayload,
   type AgentStepPayload,
   type SourceAddPayload,
@@ -1084,6 +1086,58 @@ test("agent step status and finish manage one work packet", async () => {
     assert.equal(finishedStatus.runningRuns.length, 0);
     assert.equal(finishedStatus.claimedTasks.length, 0);
     assert.match(finishedStatus.next[0], /^kforge agent next/);
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test("agent plan assigns independent runs for multiple agents", async () => {
+  const repoPath = await tempRepoPath();
+  try {
+    initRepo(repoPath);
+    await writeFile(path.join(repoPath, "raw", "source.md"), "# Source\n", "utf8");
+    createReview(repoPath, {
+      title: "Parallel One",
+      targets: ["wiki/Parallel One.md"],
+      sources: ["raw/source.md"],
+      kind: "compile",
+    });
+    createReview(repoPath, {
+      title: "Parallel Two",
+      targets: ["wiki/Parallel Two.md"],
+      sources: ["raw/source.md"],
+      kind: "compile",
+    });
+
+    const plan = JSON.parse(
+      agentPlan(repoPath, { agents: ["agent-a", "agent-b", "agent-a"], note: "parallel start", json: true }).messages[0],
+    ) as AgentPlanPayload;
+
+    assert.equal(plan.requested, 2);
+    assert.equal(plan.started, 2);
+    assert.equal(plan.seeded.counts.created, 2);
+    assert.deepEqual(plan.unassignedAgents, []);
+    assert.equal(new Set(plan.assignments.map((assignment) => assignment.task.file)).size, 2);
+    assert.equal(new Set(plan.assignments.map((assignment) => assignment.run.file)).size, 2);
+    assert.deepEqual(
+      plan.assignments.map((assignment) => assignment.agent),
+      ["agent-a", "agent-b"],
+    );
+    assert.match(plan.assignments[0]?.commands.join("\n") ?? "", /kforge agent draft/);
+    assert.match(plan.assignments[0]?.finish[0] ?? "", /^kforge agent finish/);
+    assert.match(plan.next.join("\n"), /kforge agent step/);
+
+    const statusA = JSON.parse(agentStatus(repoPath, { agent: "agent-a", json: true }).messages[0]) as AgentStatusPayload;
+    const statusB = JSON.parse(agentStatus(repoPath, { agent: "agent-b", json: true }).messages[0]) as AgentStatusPayload;
+    assert.equal(statusA.runningRuns[0]?.file, plan.assignments[0]?.run.file);
+    assert.equal(statusB.runningRuns[0]?.file, plan.assignments[1]?.run.file);
+    assert.match(await readFile(path.join(repoPath, plan.assignments[0]?.run.file ?? ""), "utf8"), /parallel start/);
+
+    const secondPlan = JSON.parse(
+      agentPlan(repoPath, { agents: ["agent-c"], seed: false, json: true }).messages[0],
+    ) as AgentPlanPayload;
+    assert.equal(secondPlan.started, 0);
+    assert.deepEqual(secondPlan.unassignedAgents, ["agent-c"]);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }

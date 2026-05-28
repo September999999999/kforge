@@ -287,6 +287,22 @@ kforge review queue ./my-topic
 kforge review next ./my-topic
 ```
 
+When there are several actionable reviews, plan independent work for multiple
+agents in one pass:
+
+```bash
+kforge agent plan ./my-topic \
+  --agent agent-a \
+  --agent agent-b \
+  --agent agent-c \
+  --json
+```
+
+`agent plan` seeds review-backed tasks if needed, claims different open tasks
+for each assigned agent, starts one run per assignment, and returns the focused
+`agent step` command each worker should run next. Agents that could not be
+assigned are listed under `unassignedAgents`.
+
 For compile reviews, `kforge review next` shows the source, target, compile
 draft, and Proposed Content writeback commands to run next. The draft carries
 source metadata, source excerpts, and existing target context when available.

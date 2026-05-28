@@ -12,6 +12,7 @@ import {
   addSource,
   agentDraft,
   agentFinish,
+  agentPlan,
   agentStatus,
   agentStep,
   auditClaims,
@@ -365,6 +366,24 @@ export function createKforgeMcpServer(options: McpOptions = {}): McpServer {
     },
     async ({ path: repoPath, agent, json }) =>
       runAsTool(() => agentStatus(toolRepoPath(defaultRepoPath, repoPath), { agent, json })),
+  );
+
+  server.registerTool(
+    "kforge_agent_plan",
+    {
+      title: "Plan parallel agent runs",
+      description: "Assign independent tasks and start auditable runs for multiple agents in one deterministic pass.",
+      inputSchema: z.object({
+        path: repoPathSchema,
+        agents: z.array(z.string().min(1)).min(1),
+        seed: z.boolean().optional(),
+        limit: z.number().int().positive().optional(),
+        note: z.string().optional(),
+        json: z.boolean().optional(),
+      }),
+    },
+    async ({ path: repoPath, agents, seed, limit, note, json }) =>
+      runAsTool(() => agentPlan(toolRepoPath(defaultRepoPath, repoPath), { agents, seed, limit, note, json })),
   );
 
   server.registerTool(

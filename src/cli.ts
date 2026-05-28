@@ -7,6 +7,7 @@ import {
   addSource,
   agentDraft,
   agentFinish,
+  agentPlan,
   agentStatus,
   agentStep,
   auditClaims,
@@ -580,6 +581,21 @@ function runAgentCommand(args: string[]): CommandResult {
     return agentStatus(repoPath, { agent, json });
   }
 
+  if (subcommand === "plan") {
+    const parsed = parseArgs(rest);
+    const repoPath = resolveRepoPath(parsed.positionals[0] ?? ".");
+    const agents = manyOptions(parsed.options, "agent");
+    const limitValue = oneOption(parsed.options, "limit", false);
+    const seed = !flagOption(parsed.options, "no-seed");
+    const note = oneOption(parsed.options, "note", false);
+    const json = flagOption(parsed.options, "json");
+    const limit = limitValue ? parsePositiveInteger(limitValue, "--limit") : undefined;
+    if (agents.length === 0) {
+      throw new Error("Missing required option: --agent");
+    }
+    return agentPlan(repoPath, { agents, seed, limit, note, json });
+  }
+
   if (subcommand === "finish") {
     const parsed = parseArgs(rest);
     const repoPath = resolveRepoPath(parsed.positionals[0] ?? ".");
@@ -617,7 +633,7 @@ function runAgentCommand(args: string[]): CommandResult {
   }
 
   throw new Error(
-    "Usage: kforge agent next [path] --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]\n       kforge agent step [path] --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]\n       kforge agent draft [path] --agent <name> [--run <runs/file.md>] [--json]\n       kforge agent status [path] --agent <name> [--json]\n       kforge agent finish [path] --agent <name> [--run <runs/file.md>] [--status <success|failure>] [--task-done] [--note <text>] [--json]\n       kforge agent list\n       kforge agent print [--template <agents|claude|cursor|generic>]\n       kforge agent install [path] [--template <agents|claude|cursor|generic>] [--force]",
+    "Usage: kforge agent next [path] --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]\n       kforge agent step [path] --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]\n       kforge agent draft [path] --agent <name> [--run <runs/file.md>] [--json]\n       kforge agent status [path] --agent <name> [--json]\n       kforge agent plan [path] --agent <name> --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]\n       kforge agent finish [path] --agent <name> [--run <runs/file.md>] [--status <success|failure>] [--task-done] [--note <text>] [--json]\n       kforge agent list\n       kforge agent print [--template <agents|claude|cursor|generic>]\n       kforge agent install [path] [--template <agents|claude|cursor|generic>] [--force]",
   );
 }
 
@@ -967,6 +983,8 @@ Usage:
   kforge agent draft [path] --agent <name> [--run <runs/file.md>] [--json]
                                                        create a compile draft for current work
   kforge agent status [path] --agent <name> [--json]    show current work for one agent
+  kforge agent plan [path] --agent <name> --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]
+                                                       assign independent runs to multiple agents
   kforge agent finish [path] --agent <name> [--run <runs/file.md>] [--status <success|failure>] [--task-done] [--note <text>] [--json]
                                                        finish the current agent run
   kforge agent list                                     list installable agent instruction templates

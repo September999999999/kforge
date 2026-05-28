@@ -228,6 +228,19 @@ kforge agent step ./my-topic --agent local-agent --json
 kforge agent draft ./my-topic --agent local-agent --json
 ```
 
+To prepare work for several local or remote agents, plan multiple independent
+runs from the same review queue:
+
+```bash
+kforge agent plan ./my-topic \
+  --agent agent-a \
+  --agent agent-b \
+  --json
+```
+
+Each assignment gets a distinct claimed task, a `runs/` log, focused read refs,
+and the next `agent step` command for that worker.
+
 The draft includes source metadata, source excerpts, and existing target
 context. Edit it before attaching it back to the review.
 Replace the draft TODOs before accepting; `kforge doctor` and `kforge review
@@ -279,7 +292,7 @@ kforge-mcp ./my-topic
 ## Suggested Agent Workflow
 
 ```text
-context -> workflow -> agent next -> agent step -> agent draft -> review content -> apply -> finish -> refresh
+context -> workflow -> agent plan/next -> agent step -> agent draft -> review content -> apply -> finish -> refresh
 ```
 
 The repo stays plain Markdown throughout the process.

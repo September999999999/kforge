@@ -427,6 +427,35 @@ export interface AgentStatusPayload {
   next: string[];
 }
 
+export interface AgentPlanOptions {
+  agents: string[];
+  seed?: boolean;
+  limit?: number;
+  note?: string;
+  json?: boolean;
+}
+
+export interface AgentPlanAssignment {
+  agent: string;
+  task: TaskItem;
+  run: RunItem;
+  read: string[];
+  commands: string[];
+  finish: string[];
+  next: string[];
+}
+
+export interface AgentPlanPayload {
+  ok: true;
+  updatedAt: string;
+  requested: number;
+  started: number;
+  seeded: TaskSeedPayload;
+  assignments: AgentPlanAssignment[];
+  unassignedAgents: string[];
+  next: string[];
+}
+
 export interface AgentFinishOptions {
   agent: string;
   run?: string;
@@ -2083,6 +2112,100 @@ export function agentStatus(repoPath: string, options: AgentStatusOptions): Comm
     "",
     ...payload.next.map((command) => `- \`${command}\``),
     "",
+  ];
+
+  return { ok: true, messages: [lines.join("\n")] };
+}
+
+export function agentPlan(repoPath: string, options: AgentPlanOptions): CommandResult {
+  requireRepo(repoPath);
+
+  const agents = [...new Set(options.agents.map((agent) => agent.trim()).filter(Boolean))];
+  if (agents.length === 0) {
+    return { ok: false, messages: ["agent plan requires at least one --agent"] };
+  }
+
+  let seeded = taskSeedPayload(0, []);
+  if (options.seed !== false) {
+    const seedResult = seedTasks(repoPath, { limit: Math.max(options.limit ?? agents.length, agents.length), json: true });
+    if (!seedResult.ok) {
+      return seedResult;
+    }
+    seeded = JSON.parse(seedResult.messages[0]) as TaskSeedPayload;
+  }
+
+  const assignments: AgentPlanAssignment[] = [];
+  const unassignedAgents: string[] = [];
+
+  for (const agent of agents) {
+    const result = nextRun(repoPath, {
+      agent,
+      seed: false,
+      limit: options.limit,
+      note: options.note,
+      json: true,
+    });
+    if (!result.ok) {
+      return result;
+    }
+
+    const payload = JSON.parse(result.messages[0]) as RunNextPayload;
+    if (!payload.task || !payload.run) {
+      unassignedAgents.push(agent);
+      continue;
+    }
+
+    assignments.push({
+      agent,
+      task: payload.task,
+      run: payload.run,
+      read: agentStepReadRefs(payload.run, payload.task),
+      commands: agentStepCommands(payload.run, payload.task),
+      finish: [`kforge agent finish . --agent ${shellQuote(agent)} --run ${shellQuote(payload.run.file)} --status success --task-done --json`],
+      next: [`kforge agent step . --agent ${shellQuote(agent)} --json`, `kforge run inspect . --run ${shellQuote(payload.run.file)} --json`],
+    });
+  }
+
+  const payload: AgentPlanPayload = {
+    ok: true,
+    updatedAt: today(),
+    requested: agents.length,
+    started: assignments.length,
+    seeded,
+    assignments,
+    unassignedAgents,
+    next:
+      unassignedAgents.length > 0
+        ? ["kforge review queue . --json", "kforge task seed . --json"]
+        : assignments.map((assignment) => `kforge agent step . --agent ${shellQuote(assignment.agent)} --json`),
+  };
+
+  if (options.json) {
+    return { ok: true, messages: [JSON.stringify(payload, null, 2)] };
+  }
+
+  const lines = [
+    "# Agent Parallel Plan",
+    "",
+    `Updated: ${today()}`,
+    `Requested agents: ${payload.requested}`,
+    `Started runs: ${payload.started}`,
+    `Unassigned agents: ${payload.unassignedAgents.length}`,
+    "",
+    ...(assignments.length > 0
+      ? [
+          "| Agent | Task | Run | Next |",
+          "| --- | --- | --- | --- |",
+          ...assignments.map(
+            (assignment) =>
+              `| ${escapeTableCell(assignment.agent)} | \`${assignment.task.file}\` | \`${assignment.run.file}\` | \`${assignment.next[0]}\` |`,
+          ),
+        ]
+      : ["No agent runs were started."]),
+    "",
+    ...(unassignedAgents.length > 0
+      ? ["## Unassigned", "", ...unassignedAgents.map((agent) => `- ${agent}`), "", "Run `kforge review queue .` or `kforge task seed .` to create more work."]
+      : []),
   ];
 
   return { ok: true, messages: [lines.join("\n")] };

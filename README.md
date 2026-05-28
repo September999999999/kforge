@@ -104,6 +104,7 @@ shell scripts can all understand.
 - stage broad or risky changes through review artifacts
 - promote useful outputs into reviewable wiki or claim updates
 - seed and claim review work as tasks so multiple agents can coordinate
+- pre-plan independent runs for several agents from the same review queue
 - record auditable agent runs with logs and success/failure status
 - run deterministic health checks and trust score reports
 - audit claim provenance, status, confidence, source drift, and review debt
@@ -141,6 +142,7 @@ tools that do not require an LLM provider:
 - inspect one file before reading it in full
 - generate agent task packs for LLM handoff
 - expose repo operations through a stdio MCP server
+- plan multiple independent agent runs from one review queue
 - run structural health checks for links and local source references
 - validate the `kb.yaml` protocol manifest
 - detect stale generated index files after repo changes
@@ -313,6 +315,19 @@ kforge agent next ~/research/my-topic --agent local-agent --json
 kforge agent step ~/research/my-topic --agent local-agent --json
 kforge agent draft ~/research/my-topic --agent local-agent --json
 ```
+
+Plan independent work packets for several agents:
+
+```bash
+kforge agent plan ~/research/my-topic \
+  --agent agent-a \
+  --agent agent-b \
+  --agent agent-c \
+  --json
+```
+
+This sequentially claims different open tasks, starts one auditable run per
+assigned agent, and prints the `agent step` command each worker should run next.
 
 Edit the generated `outputs/...-draft.md`, then attach it to the review:
 
@@ -493,6 +508,8 @@ kforge agent draft [path] --agent <name> [--run <runs/file.md>] [--json]
                          create a compile draft for current work
 kforge agent status [path] --agent <name> [--json]
                          show current work for one agent
+kforge agent plan [path] --agent <name> --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]
+                         assign independent runs to multiple agents
 kforge agent finish [path] --agent <name> [--run <runs/file.md>] [--status <success|failure>] [--task-done] [--note <text>] [--json]
                          finish the current agent run
 kforge agent list        list installable agent instruction templates

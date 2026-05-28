@@ -88,4 +88,5 @@ temporary project:
 
 ```bash
 npm run check:published
+npm run release:github
 ```

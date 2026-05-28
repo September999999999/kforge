@@ -54,6 +54,7 @@ const requiredScripts = [
   "clean",
   "demo:sync",
   "prepack",
+  "release:github",
   "smoke",
   "test",
 ];
@@ -195,6 +196,7 @@ async function main(): Promise<void> {
   expect(scripts.prepack?.includes("check:install") === true, "prepack must run check:install", issues);
   expect(scripts.prepack?.includes("check:launch") === true, "prepack must run check:launch", issues);
   expect(scripts.prepack?.includes("check:release") === true, "prepack must run check:release", issues);
+  expect(scripts["release:github"] === "node dist/scripts/github-release.js", "release:github must run dist/scripts/github-release.js", issues);
   expect(scripts.test?.includes("check:stack") === true, "test must run check:stack", issues);
   expect(scripts.test?.includes("check:package") === true, "test must run check:package", issues);
   expect(scripts.test?.includes("check:surface") === true, "test must run check:surface", issues);

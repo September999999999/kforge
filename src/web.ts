@@ -252,11 +252,12 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
       const body = await readJsonBody(request);
       const file = optionalString(body.file);
       const content = optionalString(body.content);
-      if (!file || !content) {
-        sendJson(response, 400, { ok: false, error: "review file and proposed content are required" });
+      const from = optionalString(body.from);
+      if (!file || (!content && !from)) {
+        sendJson(response, 400, { ok: false, error: "review file and proposed content or source output are required" });
         return;
       }
-      const result = updateReviewContent(repoPath, { file, content, json: true });
+      const result = updateReviewContent(repoPath, { file, content, from, json: true });
       sendJson(response, result.ok ? 200 : 400, commandResponse(result));
       return;
     }
@@ -1280,6 +1281,7 @@ function webDashboardHtml(): string {
       if (!String(file || "").startsWith("reviews/")) return "";
       return '<div class="viewer-actions">' +
         '<button class="button small" type="button" data-compile-draft="true">Draft Output</button>' +
+        '<button class="button small primary" type="button" data-draft-attach="true">Draft + Attach</button>' +
         '<button class="button small primary" type="button" data-review-status="accepted">Accept</button>' +
         '<button class="button small danger" type="button" data-review-status="rejected">Reject</button>' +
         '<button class="button small" type="button" data-review-status="proposed">Reopen</button>' +
@@ -1315,6 +1317,9 @@ function webDashboardHtml(): string {
       }
       for (const button of document.querySelectorAll("[data-compile-draft]")) {
         button.addEventListener("click", () => draftReview(file));
+      }
+      for (const button of document.querySelectorAll("[data-draft-attach]")) {
+        button.addEventListener("click", () => draftAndAttachReview(file));
       }
       for (const button of document.querySelectorAll("[data-apply-preview]")) {
         button.addEventListener("click", () => previewApply(file));
@@ -1356,6 +1361,32 @@ function webDashboardHtml(): string {
           await openFile(payload.output);
         }
         toast("Draft output written: " + (payload.output || "outputs/"));
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function draftAndAttachReview(file) {
+      if (!file) return;
+      setBusy(true);
+      try {
+        const draftResult = await api("/api/compile-draft", {
+          method: "POST",
+          body: JSON.stringify({ review: file }),
+        });
+        const draft = draftResult.payload || {};
+        if (!draft.output) {
+          throw new Error("Draft output was not written");
+        }
+        const contentResult = await api("/api/review-content", {
+          method: "POST",
+          body: JSON.stringify({ file, from: draft.output }),
+        });
+        await load();
+        await openFile(file);
+        toast("Draft attached from " + (contentResult.payload?.source || draft.output));
       } catch (error) {
         toast(error.message || String(error));
       } finally {

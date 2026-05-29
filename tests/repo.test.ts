@@ -574,6 +574,16 @@ test("web dashboard serves repo state and safe actions", async () => {
           note: "web plan",
         }),
       })) as { ok?: boolean; payload?: AgentPlanPayload };
+      const draftAttach = (await fetchJson(`${handle.url}/api/review-content`, {
+        method: "POST",
+        body: JSON.stringify({ file: secondaryReviewFile, from: draft.payload?.output }),
+      })) as { ok?: boolean; payload?: ReviewContentPayload };
+      const attachedReviewPreview = (await fetchJson(
+        `${handle.url}/api/file?path=${encodeURIComponent(secondaryReviewFile)}`,
+      )) as {
+        ok?: boolean;
+        content?: string;
+      };
 
       assert.match(html, /Knowledge Repo Dashboard/);
       assert.match(html, /File Preview/);
@@ -623,6 +633,11 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(draft.payload?.review, secondaryReviewFile);
       assert.match(draft.payload?.output ?? "", /^outputs\/.+web-launch-review-draft\.md$/);
       assert.match(await readFile(path.join(repoPath, draft.payload?.output ?? ""), "utf8"), /# Web Launch Review/);
+      assert.equal(draftAttach.ok, true);
+      assert.equal(draftAttach.payload?.review, secondaryReviewFile);
+      assert.equal(draftAttach.payload?.source, draft.payload?.output);
+      assert.match(attachedReviewPreview.content ?? "", /# Web Launch Review/);
+      assert.match(attachedReviewPreview.content ?? "", /TODO: Write a concise source-grounded summary/);
       assert.equal(accept.ok, true);
       assert.equal(accept.payload?.previousStatus, "proposed");
       assert.equal(accept.payload?.status, "accepted");
@@ -644,7 +659,7 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(invalidStatus.status, 400);
       assert.match(await invalidStatus.text(), /review file and status are required/);
       assert.equal(missingContent.status, 400);
-      assert.match(await missingContent.text(), /review file and proposed content are required/);
+      assert.match(await missingContent.text(), /review file and proposed content or source output are required/);
       assert.equal(refresh.ok, true);
       assert.equal(launch.ok, true);
       assert.equal(launch.payload?.items?.length, 1);
@@ -3381,7 +3396,10 @@ async function fetchJson(url: string, init?: RequestInit): Promise<unknown> {
     headers: { "content-type": "application/json" },
     ...init,
   });
-  assert.equal(response.ok, true);
+  if (!response.ok) {
+    const body = await response.text();
+    assert.fail(`${response.status} ${url}: ${body}`);
+  }
   return response.json() as Promise<unknown>;
 }
 

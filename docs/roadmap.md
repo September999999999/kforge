@@ -74,6 +74,7 @@ Goal: make answers accumulate instead of disappearing.
 - output filing templates
 - `kforge promote` review flow from `outputs/` toward `wiki/` and `claims/`,
   including JSON output for automation
+- Web dashboard output list, inspect, and promote flow
 - Obsidian-friendly answer pages
 
 ## Milestone 4: Integrations

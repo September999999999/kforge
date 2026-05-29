@@ -114,6 +114,8 @@ slides, notebooks, exports, and decision memos.
 
 Outputs can later be promoted into `reviews/` with `kforge promote`, then filed
 into `wiki/` or `claims/` after review.
+The Web dashboard exposes the same output list, inspect, and promote flow so a
+useful answer can become a review artifact without leaving the local workbench.
 
 Example:
 

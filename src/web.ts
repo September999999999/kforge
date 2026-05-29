@@ -9,7 +9,10 @@ import {
   dashboardRepo,
   doctorRepo,
   inspectRepo,
+  inspectOutput,
+  listOutputs,
   listRuns,
+  promoteOutput,
   refreshRepo,
   applyReview,
   reviewQueue,
@@ -116,6 +119,23 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
       return;
     }
 
+    if (request.method === "GET" && url.pathname === "/api/outputs") {
+      const result = listOutputs(repoPath, { json: true });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/output") {
+      const file = optionalString(url.searchParams.get("path") ?? url.searchParams.get("file"));
+      if (!file) {
+        sendJson(response, 400, { ok: false, error: "output file is required" });
+        return;
+      }
+      const result = inspectOutput(repoPath, { file, json: true });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
     if (request.method === "GET" && url.pathname === "/api/file") {
       const file = optionalString(url.searchParams.get("path") ?? url.searchParams.get("file"));
       if (!file) {
@@ -138,6 +158,27 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
         query,
         scopes: searchScopes(body.scopes),
         limit: positiveNumber(body.limit),
+        json: true,
+      });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/promote-output") {
+      const body = await readJsonBody(request);
+      const file = optionalString(body.file);
+      const target = optionalString(body.target);
+      if (!file || !target) {
+        sendJson(response, 400, { ok: false, error: "output file and target are required" });
+        return;
+      }
+      const result = promoteOutput(repoPath, {
+        file,
+        target,
+        sources: stringList(body.sources),
+        title: optionalString(body.title),
+        summary: optionalString(body.summary),
+        status: promoteStatus(body.status),
         json: true,
       });
       sendJson(response, result.ok ? 200 : 400, commandResponse(result));
@@ -394,6 +435,10 @@ function searchScopes(value: unknown): Array<"raw" | "wiki" | "claims" | "review
       scope === "raw" || scope === "wiki" || scope === "claims" || scope === "reviews" || scope === "outputs",
   );
   return scopes.length > 0 ? scopes : undefined;
+}
+
+function promoteStatus(value: unknown): "proposed" | "accepted" | "rejected" | undefined {
+  return value === "proposed" || value === "accepted" || value === "rejected" ? value : undefined;
 }
 
 function optionalString(value: unknown): string | undefined {
@@ -838,6 +883,7 @@ function webDashboardHtml(): string {
         <a href="#overview">Overview</a>
         <a href="#search">Search</a>
         <a href="#files">Files</a>
+        <a href="#outputs">Outputs</a>
         <a href="#reviews">Reviews</a>
         <a href="#agents">Agents</a>
         <a href="#actions">Actions</a>
@@ -894,6 +940,10 @@ function webDashboardHtml(): string {
               <div class="preview-output" id="searchResults"></div>
             </div>
           </section>
+          <section id="outputs">
+            <div class="section-head"><h2>Outputs</h2><span class="subtle" id="outputSummary"></span></div>
+            <div class="section-body" id="outputTable"></div>
+          </section>
           <section id="agents">
             <div class="section-head"><h2>Agents</h2><span class="subtle" id="agentSummary"></span></div>
             <div class="section-body" id="agentTable"></div>
@@ -948,9 +998,10 @@ function webDashboardHtml(): string {
     async function load() {
       setBusy(true);
       try {
-        const [data, files] = await Promise.all([api("/api/state"), api("/api/files")]);
+        const [data, files, outputs] = await Promise.all([api("/api/state"), api("/api/files"), api("/api/outputs")]);
         render(data);
         renderFiles(files);
+        renderOutputs(outputs.payload || {});
         toast("Ready");
       } catch (error) {
         toast(error.message || String(error));
@@ -994,6 +1045,20 @@ function webDashboardHtml(): string {
       bindFileOpenButtons();
     }
 
+    function renderOutputs(outputs) {
+      const items = outputs?.items || [];
+      $("outputSummary").textContent = (outputs?.counts?.outputs ?? items.length) + " outputs";
+      if (!items.length) {
+        $("outputTable").innerHTML = '<div class="empty">No outputs.</div>';
+        return;
+      }
+      $("outputTable").innerHTML = '<table><thead><tr><th>Output</th><th>Reviews</th><th></th></tr></thead><tbody>' +
+        items.map((item) => '<tr><td><code>' + h(item.output) + '</code><br>' + h(item.title) + '</td><td>' + h((item.reviewRefs || []).length) + '</td><td><button class="button small" type="button" data-open-file="' + h(item.output) + '">Open</button> <button class="button small primary" type="button" data-promote-output="' + h(item.output) + '">Promote</button></td></tr>').join("") +
+        '</tbody></table>';
+      bindFileOpenButtons();
+      bindPromoteOutputButtons();
+    }
+
     function renderSearchResults(payload) {
       const items = payload?.items || [];
       $("searchSummary").textContent = h(payload?.query || "") + (payload?.total !== undefined ? " · " + h(payload.total) + " matches" : "");
@@ -1026,6 +1091,12 @@ function webDashboardHtml(): string {
       }
     }
 
+    function bindPromoteOutputButtons() {
+      for (const button of document.querySelectorAll("[data-promote-output]")) {
+        button.addEventListener("click", () => openOutputPromotion(button.getAttribute("data-promote-output") || ""));
+      }
+    }
+
     async function openFile(file) {
       if (!file) return;
       setBusy(true);
@@ -1041,6 +1112,61 @@ function webDashboardHtml(): string {
         bindReviewActions(payload.file);
         location.hash = "filePreview";
         toast("Opened " + payload.file);
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function openOutputPromotion(file) {
+      if (!file) return;
+      setBusy(true);
+      try {
+        const result = await api("/api/output?path=" + encodeURIComponent(file));
+        const payload = result.payload || {};
+        $("filePreviewSummary").textContent = "output";
+        $("filePreviewBody").innerHTML =
+          '<div class="viewer-meta"><code>' + h(payload.output || file) + '</code><span>' + h(payload.size || 0) + ' bytes</span><span>' + h((payload.referencedBy || []).length) + ' refs</span></div>' +
+          '<form class="content-editor" id="promoteOutputForm">' +
+          '<label>Target <input name="target" placeholder="wiki/Page.md"></label>' +
+          '<label>Sources <input name="sources" value="' + h((payload.sources || []).join(", ")) + '" placeholder="raw/source.md"></label>' +
+          '<button class="button small primary" type="submit">Promote to Review</button>' +
+          '</form>' +
+          '<div class="viewer-meta"><span class="status ok">headings</span><span>' + h((payload.headings || []).join(" · ") || "none") + '</span></div>' +
+          '<div class="viewer-meta"><span class="status warn">referenced</span><span>' + h((payload.referencedBy || []).join(", ") || "none") + '</span></div>' +
+          '<div class="preview-output" id="promoteOutputResult"></div>';
+        $("promoteOutputForm").addEventListener("submit", (event) => promoteOutputFile(event, payload.output || file));
+        location.hash = "filePreview";
+        toast("Output ready to promote");
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function promoteOutputFile(event, file) {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      setBusy(true);
+      try {
+        const result = await api("/api/promote-output", {
+          method: "POST",
+          body: JSON.stringify({
+            file,
+            target: String(form.get("target") || ""),
+            sources: list(form.get("sources")),
+            status: "proposed",
+          }),
+        });
+        const payload = result.payload || {};
+        await load();
+        const target = $("promoteOutputResult");
+        if (target) {
+          target.innerHTML = '<div class="viewer-meta"><span class="status ok">created</span><code>' + h(payload.review || "") + '</code><code>' + h(payload.target || "") + '</code></div>';
+        }
+        toast("Promoted output to " + (payload.review || "review"));
       } catch (error) {
         toast(error.message || String(error));
       } finally {

@@ -348,6 +348,11 @@ test("web dashboard serves repo state and safe actions", async () => {
     await mkdir(path.join(repoPath, "raw", "_meta"), { recursive: true });
     await writeFile(path.join(repoPath, "raw", "_meta", "source.md"), "# Source Metadata\n", "utf8");
     await writeFile(path.join(repoPath, "wiki", "Existing.md"), "# Existing\n", "utf8");
+    await writeFile(
+      path.join(repoPath, "outputs", "web-answer.md"),
+      "---\ntitle: Web Answer\nsources:\n  - raw/source.md\n---\n# Web Answer\n\nUseful output from the web dashboard.\n",
+      "utf8",
+    );
     createReview(repoPath, {
       title: "Web Review",
       targets: ["wiki/Web Review.md"],
@@ -388,6 +393,19 @@ test("web dashboard serves repo state and safe actions", async () => {
         method: "POST",
         body: JSON.stringify({ query: "compiled", scopes: ["reviews"], limit: 3 }),
       })) as { ok?: boolean; payload?: SearchPayload };
+      const outputs = (await fetchJson(`${handle.url}/api/outputs`)) as { ok?: boolean; payload?: OutputListPayload };
+      const outputInspect = (await fetchJson(`${handle.url}/api/output?path=${encodeURIComponent("outputs/web-answer.md")}`)) as {
+        ok?: boolean;
+        payload?: OutputInspectPayload;
+      };
+      const promote = (await fetchJson(`${handle.url}/api/promote-output`, {
+        method: "POST",
+        body: JSON.stringify({
+          file: "outputs/web-answer.md",
+          target: "wiki/Web Answer.md",
+          sources: ["raw/source.md"],
+        }),
+      })) as { ok?: boolean; payload?: PromoteOutputPayload };
       const contentUpdate = (await fetchJson(`${handle.url}/api/review-content`, {
         method: "POST",
         body: JSON.stringify({
@@ -506,6 +524,15 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(search.payload?.query, "compiled");
       assert.deepEqual(search.payload?.scopes, ["reviews"]);
       assert.equal(search.payload?.items.some((item) => item.path === reviewFile), true);
+      assert.equal(outputs.ok, true);
+      assert.equal(outputs.payload?.items.some((item) => item.output === "outputs/web-answer.md"), true);
+      assert.equal(outputInspect.ok, true);
+      assert.equal(outputInspect.payload?.title, "Web Answer");
+      assert.deepEqual(outputInspect.payload?.sources, ["raw/source.md"]);
+      assert.equal(promote.ok, true);
+      assert.equal(promote.payload?.output, "outputs/web-answer.md");
+      assert.equal(promote.payload?.target, "wiki/Web Answer.md");
+      assert.match(promote.payload?.review ?? "", /^reviews\/.+promote-web-answer\.md$/);
       assert.equal(contentUpdate.ok, true);
       assert.equal(contentUpdate.payload?.review, reviewFile);
       assert.equal(contentUpdate.payload?.source, "inline content");

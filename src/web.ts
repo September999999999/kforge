@@ -12,6 +12,7 @@ import {
   dashboardRepo,
   doctorRepo,
   fetchSource,
+  fetchSources,
   inspectRepo,
   inspectOutput,
   listOutputs,
@@ -223,6 +224,27 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
         date: optionalString(body.date),
         license: optionalString(body.license),
         note: optionalString(body.note),
+        json: true,
+      });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/source-fetch-list") {
+      const body = await readJsonBody(request);
+      const text = optionalString(body.text ?? body.urls);
+      if (!text) {
+        sendJson(response, 400, { ok: false, error: "source URL list text is required" });
+        return;
+      }
+      const result = await fetchSources(repoPath, {
+        text,
+        titlePrefix: optionalString(body.titlePrefix),
+        author: optionalString(body.author),
+        date: optionalString(body.date),
+        license: optionalString(body.license),
+        note: optionalString(body.note),
+        dryRun: Boolean(body.dryRun),
         json: true,
       });
       sendJson(response, result.ok ? 200 : 400, commandResponse(result));
@@ -834,6 +856,14 @@ function webDashboardHtml(): string {
       font-weight: 700;
       font-size: 12px;
     }
+    label.inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+    label.inline input {
+      width: auto;
+    }
     input, textarea {
       border: 1px solid var(--border);
       border-radius: 6px;
@@ -1004,6 +1034,13 @@ function webDashboardHtml(): string {
                 <label>Title <input name="title" placeholder="optional title override"></label>
                 <label>Note <input name="note" placeholder="capture note"></label>
                 <button class="button primary" type="submit">Fetch Source</button>
+              </form>
+              <form id="sourceFetchListForm">
+                <label>URL List <textarea name="urls" placeholder="https://example.com/article&#10;Title | https://example.com/other&#10;[Paper](https://example.com/paper)"></textarea></label>
+                <label>Title Prefix <input name="titlePrefix" placeholder="optional prefix"></label>
+                <label>Note <input name="note" placeholder="batch capture note"></label>
+                <label class="inline"><input name="dryRun" type="checkbox"> Dry run</label>
+                <button class="button" type="submit">Fetch URL List</button>
               </form>
               <div class="preview-output" id="ingestResult"></div>
             </div>
@@ -1559,9 +1596,32 @@ function webDashboardHtml(): string {
         rows;
     }
 
+    function renderFetchListResult(payload) {
+      const items = payload?.items || [];
+      const completed = payload?.dryRun ? payload?.counts?.wouldFetch : payload?.counts?.fetched;
+      const rows = items.length
+        ? '<table><thead><tr><th>Action</th><th>URL</th><th>Source</th><th>Status</th></tr></thead><tbody>' +
+          items.map((item) => '<tr><td>' + badge(item.action) + '</td><td>' + h(item.title || item.url || "-") + '<br><code>' + h(item.url || "-") + '</code></td><td><code>' + h(item.source || item.error || "-") + '</code></td><td>' + h(item.status || "-") + '</td></tr>').join("") +
+          '</tbody></table>'
+        : '<div class="empty">No URL candidates.</div>';
+      $("ingestResult").innerHTML =
+        '<div class="viewer-meta"><span class="status ok">' +
+        h(payload?.dryRun ? "dry run" : "fetched") +
+        '</span><span>' +
+        h(completed ?? 0) +
+        '/' +
+        h(payload?.counts?.candidates ?? 0) +
+        ' URL source(s)</span></div>' +
+        rows;
+    }
+
     function badge(status) {
       const value = h(status || "-");
-      const cls = status === "success" || status === "done" || status === "applied" || status === "accepted" ? "ok" : status === "failure" ? "bad" : "warn";
+      const cls = status === "success" || status === "done" || status === "applied" || status === "accepted" || status === "fetched"
+        ? "ok"
+        : status === "failure" || status === "failed"
+          ? "bad"
+          : "warn";
       return '<span class="status ' + cls + '">' + value + '</span>';
     }
 
@@ -1599,6 +1659,36 @@ function webDashboardHtml(): string {
           await openFile(payload.source);
         }
         toast("Fetched source: " + (payload.source || "raw/"));
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    });
+    $("sourceFetchListForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      const dryRun = form.get("dryRun") === "on";
+      setBusy(true);
+      try {
+        const result = await api("/api/source-fetch-list", {
+          method: "POST",
+          body: JSON.stringify({
+            text: String(form.get("urls") || ""),
+            titlePrefix: String(form.get("titlePrefix") || ""),
+            note: String(form.get("note") || ""),
+            dryRun,
+          }),
+        });
+        const payload = result.payload || {};
+        await load();
+        $("ingestSummary").textContent = dryRun ? "dry run" : (payload.counts?.fetched || 0) + " fetched";
+        renderFetchListResult(payload);
+        const firstSource = (payload.items || []).find((item) => item.source)?.source;
+        if (!dryRun && firstSource) {
+          await openFile(firstSource);
+        }
+        toast((dryRun ? "Previewed " : "Fetched ") + (payload.counts?.candidates || 0) + " URL source(s)");
       } catch (error) {
         toast(error.message || String(error));
       } finally {

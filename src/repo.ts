@@ -90,7 +90,8 @@ export interface FetchSourceOptions {
 }
 
 export interface FetchSourcesOptions {
-  file: string;
+  file?: string;
+  text?: string;
   titlePrefix?: string;
   author?: string;
   date?: string;
@@ -1349,29 +1350,26 @@ export async function fetchSource(repoPath: string, options: FetchSourceOptions)
 export async function fetchSources(repoPath: string, options: FetchSourcesOptions): Promise<CommandResult> {
   requireRepo(repoPath);
 
-  const listPath = path.resolve(options.file);
-  if (!exists(listPath)) {
-    return { ok: false, messages: [`source URL list not found: ${options.file}`] };
+  const listOrError = sourceFetchListInput(options);
+  if (!listOrError.ok) {
+    return listOrError.result;
   }
 
-  if (!statSyncish(listPath).isFile()) {
-    return { ok: false, messages: [`source URL list path is not a file: ${options.file}`] };
-  }
-
-  const candidates = sourceFetchListCandidates(listPath, options.titlePrefix);
+  const { label, lines } = listOrError;
+  const candidates = sourceFetchListCandidates(lines, options.titlePrefix);
   if (candidates.length === 0) {
-    return { ok: false, messages: [`source URL list has no http or https URLs: ${options.file}`] };
+    return { ok: false, messages: [`source URL list has no http or https URLs: ${label}`] };
   }
 
   if (options.dryRun) {
     const items = candidates.map((candidate) => sourceFetchListItem(candidate.url, "would_fetch", { title: candidate.title }));
     if (options.json) {
-      return { ok: true, messages: [JSON.stringify(sourceFetchListPayload(listPath, items, true), null, 2)] };
+      return { ok: true, messages: [JSON.stringify(sourceFetchListPayload(label, items, true), null, 2)] };
     }
     return {
       ok: true,
       messages: [
-        `Dry run: would fetch ${items.length} URL source(s) from ${listPath}`,
+        `Dry run: would fetch ${items.length} URL source(s) from ${label}`,
         ...items.map((item) => `- ${item.url}${item.title ? ` -> ${item.title}` : ""}`),
       ],
     };
@@ -1390,12 +1388,12 @@ export async function fetchSources(repoPath: string, options: FetchSourcesOption
       author: options.author,
       date: options.date,
       license: options.license,
-      note: sourceFetchListNote(listPath, candidate.index, options.note),
+      note: sourceFetchListNote(label, candidate.index, options.note),
     });
     items.push(sourceFetchListItem(candidate.url, "fetched", { title: candidate.title, copied: imported, fetched }));
   }
 
-  const payload = sourceFetchListPayload(listPath, items, false);
+  const payload = sourceFetchListPayload(label, items, false);
   if (options.json) {
     return { ok: true, messages: [JSON.stringify(payload, null, 2)] };
   }
@@ -1403,7 +1401,7 @@ export async function fetchSources(repoPath: string, options: FetchSourcesOption
   return {
     ok: true,
     messages: [
-      `Fetched ${payload.counts.fetched} URL source(s) from ${listPath}`,
+      `Fetched ${payload.counts.fetched} URL source(s) from ${label}`,
       ...(payload.counts.failed > 0 ? [`Failed ${payload.counts.failed} URL source(s).`] : []),
       ...items.map((item) =>
         item.action === "fetched"
@@ -8785,9 +8783,35 @@ function importFetchedSource(
   };
 }
 
-function sourceFetchListCandidates(file: string, titlePrefix: string | undefined): SourceFetchListCandidate[] {
-  return readText(file)
-    .split(/\r?\n/)
+function sourceFetchListInput(
+  options: FetchSourcesOptions,
+): { ok: true; label: string; lines: string[] } | { ok: false; result: CommandResult } {
+  const file = options.file?.trim();
+  const text = options.text?.trim();
+  if (file && text) {
+    return { ok: false, result: { ok: false, messages: ["source fetch-list accepts either file or text, not both"] } };
+  }
+  if (!file && !text) {
+    return { ok: false, result: { ok: false, messages: ["source fetch-list requires a URL list file or text"] } };
+  }
+  if (text) {
+    return { ok: true, label: "inline URL list", lines: text.split(/\r?\n/) };
+  }
+
+  const listPath = path.resolve(file ?? "");
+  if (!exists(listPath)) {
+    return { ok: false, result: { ok: false, messages: [`source URL list not found: ${file}`] } };
+  }
+
+  if (!statSyncish(listPath).isFile()) {
+    return { ok: false, result: { ok: false, messages: [`source URL list path is not a file: ${file}`] } };
+  }
+
+  return { ok: true, label: listPath, lines: readText(listPath).split(/\r?\n/) };
+}
+
+function sourceFetchListCandidates(lines: string[], titlePrefix: string | undefined): SourceFetchListCandidate[] {
+  return lines
     .map((line, index) => ({ line: line.trim(), index: index + 1 }))
     .filter((item) => item.line && !item.line.startsWith("#"))
     .flatMap((item) => {

@@ -265,8 +265,8 @@ the same inspect path checks as the CLI. Its write actions intentionally stay
 narrow: save structured Proposed Content, accept or reject review artifacts,
 preview review apply as a dry run, explicitly apply accepted review content,
 create compile-review draft outputs and attach them back to reviews, fetch URL
-sources into `raw/`, refresh derived indexes, bootstrap review-first work, and
-write an agent launcher script.
+sources or pasted URL lists into `raw/`, refresh derived indexes, bootstrap
+review-first work, and write an agent launcher script.
 It can also plan multi-agent runs from the same review queue before a launcher
 is generated. The apply path uses the same accepted-review checks as `kforge
 review apply`.

@@ -365,6 +365,14 @@ test("web dashboard serves repo state and safe actions", async () => {
       contentType: "text/html; charset=utf-8",
       body: "<html><head><title>Web Source Article</title></head><body><h1>Web Source Article</h1><p>Captured from the dashboard.</p></body></html>",
     },
+    "/web-list-one": {
+      contentType: "text/html; charset=utf-8",
+      body: "<html><head><title>Web List One</title></head><body><h1>Web List One</h1><p>Batch one.</p></body></html>",
+    },
+    "/web-list-two": {
+      contentType: "text/plain; charset=utf-8",
+      body: "# Web List Two\n\nBatch two.\n",
+    },
   });
   try {
     initRepo(repoPath);
@@ -453,6 +461,26 @@ test("web dashboard serves repo state and safe actions", async () => {
       const fetchedPreview = (await fetchJson(`${handle.url}/api/file?path=${encodeURIComponent("raw/web-source-article.md")}`)) as {
         ok?: boolean;
         content?: string;
+      };
+      const fetchListPreview = (await fetchJson(`${handle.url}/api/source-fetch-list`, {
+        method: "POST",
+        body: JSON.stringify({
+          text: `List One | ${sourceServer.url}/web-list-one\n[Second Batch](${sourceServer.url}/web-list-two)\n`,
+          titlePrefix: "Web Batch",
+          dryRun: true,
+        }),
+      })) as { ok?: boolean; payload?: SourceFetchListPayload };
+      const fetchList = (await fetchJson(`${handle.url}/api/source-fetch-list`, {
+        method: "POST",
+        body: JSON.stringify({
+          text: `List One | ${sourceServer.url}/web-list-one\n[Second Batch](${sourceServer.url}/web-list-two)\n`,
+          titlePrefix: "Web Batch",
+          note: "Fetched by the web dashboard list.",
+        }),
+      })) as { ok?: boolean; payload?: SourceFetchListPayload };
+      const filesAfterFetchList = (await fetchJson(`${handle.url}/api/files`)) as {
+        ok?: boolean;
+        items?: { file?: string; scope?: string }[];
       };
       const contentUpdate = (await fetchJson(`${handle.url}/api/review-content`, {
         method: "POST",
@@ -588,6 +616,7 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.match(html, /Knowledge Repo Dashboard/);
       assert.match(html, /File Preview/);
       assert.match(html, /Files/);
+      assert.match(html, /sourceFetchListForm/);
       assert.equal(files.ok, true);
       assert.equal(files.items?.some((item) => item.file === "raw/source.md" && item.scope === "raw"), true);
       assert.equal(files.items?.some((item) => item.file === "wiki/Existing.md" && item.scope === "wiki"), true);
@@ -626,6 +655,24 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(filesAfterFetch.items?.some((item) => item.file === "raw/web-source-article.md" && item.scope === "raw"), true);
       assert.match(fetchedPreview.content ?? "", /# Web Source Article/);
       assert.match(await readFile(path.join(repoPath, "raw", "_meta", "web-source-article.md"), "utf8"), /Fetched by the web dashboard/);
+      assert.equal(fetchListPreview.ok, true);
+      assert.equal(fetchListPreview.payload?.dryRun, true);
+      assert.equal(fetchListPreview.payload?.file, "inline URL list");
+      assert.equal(fetchListPreview.payload?.counts.wouldFetch, 2);
+      assert.equal(fetchList.ok, true);
+      assert.equal(fetchList.payload?.dryRun, false);
+      assert.equal(fetchList.payload?.counts.fetched, 2);
+      assert.equal(fetchList.payload?.items[0].source, "raw/web-batch-list-one.md");
+      assert.equal(fetchList.payload?.items[1].source, "raw/web-batch-second-batch.md");
+      assert.equal(
+        filesAfterFetchList.items?.some((item) => item.file === "raw/web-batch-list-one.md" && item.scope === "raw"),
+        true,
+      );
+      assert.match(await readFile(path.join(repoPath, "raw", "web-batch-list-one.md"), "utf8"), /# Web List One/);
+      assert.match(
+        await readFile(path.join(repoPath, "raw", "_meta", "web-batch-list-one.md"), "utf8"),
+        /Fetched by the web dashboard list/,
+      );
       assert.equal(contentUpdate.ok, true);
       assert.equal(contentUpdate.payload?.review, reviewFile);
       assert.equal(contentUpdate.payload?.source, "inline content");
@@ -954,6 +1001,18 @@ test("fetchSources imports a URL list with dry-run and JSON summaries", async ()
     const result = JSON.parse(
       (await fetchSources(repoPath, { file: listPath, titlePrefix: "Research", json: true })).messages[0],
     ) as SourceFetchListPayload;
+    const inlineDryRun = JSON.parse(
+      (
+        await fetchSources(repoPath, {
+          text: `Inline Title | ${server.url}/one\n${server.url}/two\n`,
+          titlePrefix: "Inline",
+          dryRun: true,
+          json: true,
+        })
+      ).messages[0],
+    ) as SourceFetchListPayload;
+    const missingInput = await fetchSources(repoPath, { json: true });
+    const ambiguousInput = await fetchSources(repoPath, { file: listPath, text: `${server.url}/one`, json: true });
 
     assert.equal(dryRun.dryRun, true);
     assert.equal(dryRun.counts.candidates, 2);
@@ -969,6 +1028,13 @@ test("fetchSources imports a URL list with dry-run and JSON summaries", async ()
     assert.match(result.next.join("\n"), /kforge compile plan/);
     assert.match(await readFile(path.join(repoPath, "raw", "research-first-title.md"), "utf8"), /# One Article/);
     assert.match(await readFile(path.join(repoPath, "raw", "_meta", "research-first-title.md"), "utf8"), /Fetched from URL list:/);
+    assert.equal(inlineDryRun.file, "inline URL list");
+    assert.equal(inlineDryRun.counts.candidates, 2);
+    assert.equal(inlineDryRun.items[0].title, "Inline Inline Title");
+    assert.equal(missingInput.ok, false);
+    assert.match(missingInput.messages.join("\n"), /requires a URL list file or text/);
+    assert.equal(ambiguousInput.ok, false);
+    assert.match(ambiguousInput.messages.join("\n"), /either file or text/);
   } finally {
     await server.close();
     await rm(repoPath, { recursive: true, force: true });

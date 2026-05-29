@@ -653,11 +653,13 @@ test("web dashboard serves repo state and safe actions", async () => {
           run: plannedRunFile,
           status: "success",
           note: "web run finish",
+          taskDone: true,
         }),
-      })) as { ok?: boolean; payload?: RunFinishPayload };
+      })) as { ok?: boolean; payload?: RunFinishPayload & { task?: TaskDonePayload } };
       const stateAfterRunFinish = (await fetchJson(`${handle.url}/api/state`)) as {
         ok?: boolean;
         runs?: { items?: Array<{ file?: string; status?: string; logCount?: number }> };
+        tasks?: { items?: Array<{ file?: string; status?: string }> };
       };
       const draftAttach = (await fetchJson(`${handle.url}/api/review-content`, {
         method: "POST",
@@ -833,9 +835,12 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(runLog.payload?.run.file, plannedRunFile);
       assert.equal(runFinish.ok, true);
       assert.equal(runFinish.payload?.run.status, "success");
+      assert.equal(runFinish.payload?.task?.task.status, "done");
       assert.equal(stateAfterRunFinish.runs?.items?.find((item) => item.file === plannedRunFile)?.status, "success");
+      assert.equal(stateAfterRunFinish.tasks?.items?.find((item) => item.file === plan.payload?.assignments[0]?.task.file)?.status, "done");
       assert.match(await readFile(path.join(repoPath, plannedRunFile), "utf8"), /web run log/);
       assert.match(await readFile(path.join(repoPath, plannedRunFile), "utf8"), /finished success: web run finish/);
+      assert.match(await readFile(path.join(repoPath, plan.payload?.assignments[0]?.task.file ?? ""), "utf8"), /done: web run finish/);
       assert.match(plan.payload?.assignments[0]?.run.file ?? "", /^runs\/.+web-plan-a\.md$/);
       assert.match(plan.payload?.assignments[1]?.task.file ?? "", /^tasks\/.+\.md$/);
 

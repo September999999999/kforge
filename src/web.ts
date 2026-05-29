@@ -23,6 +23,7 @@ import {
   promoteOutput,
   refreshRepo,
   applyReview,
+  completeTask,
   reviewQueue,
   searchRepo,
   taskList,
@@ -424,7 +425,21 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
         return;
       }
       const result = finishRun(repoPath, { run, status, note: optionalString(body.note), json: true });
-      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      if (!result.ok) {
+        sendJson(response, 400, commandResponse(result));
+        return;
+      }
+      const payload = parseJsonResult(result) as { run?: { task?: string } } | undefined;
+      if (Boolean(body.taskDone) && payload?.run?.task) {
+        const done = completeTask(repoPath, { task: payload.run.task, note: optionalString(body.note), json: true });
+        if (!done.ok) {
+          sendJson(response, 400, commandResponse(done));
+          return;
+        }
+        sendJson(response, 200, mergeCommandPayload(result, { task: parseJsonResult(done) }));
+        return;
+      }
+      sendJson(response, 200, commandResponse(result));
       return;
     }
 
@@ -540,6 +555,18 @@ function commandResponse(result: CommandResult): Record<string, unknown> {
     ok: result.ok,
     messages: result.messages,
     ...(parsed ? { payload: parsed } : {}),
+  };
+}
+
+function mergeCommandPayload(result: CommandResult, extra: Record<string, unknown>): Record<string, unknown> {
+  const response = commandResponse(result);
+  const payload = response.payload && typeof response.payload === "object" ? response.payload : {};
+  return {
+    ...response,
+    payload: {
+      ...payload,
+      ...extra,
+    },
   };
 }
 
@@ -1630,7 +1657,7 @@ function webDashboardHtml(): string {
     function renderRunActionResult(payload, label) {
       const target = $("runActionResult");
       if (!target) return;
-      target.innerHTML = '<div class="viewer-meta"><span class="status ok">' + h(label) + '</span><code>' + h(payload?.run?.file || "") + '</code><span>' + h(payload?.run?.status || "") + '</span><span>' + h(payload?.run?.logCount ?? 0) + ' logs</span></div>';
+      target.innerHTML = '<div class="viewer-meta"><span class="status ok">' + h(label) + '</span><code>' + h(payload?.run?.file || "") + '</code><span>' + h(payload?.run?.status || "") + '</span><span>' + h(payload?.run?.logCount ?? 0) + ' logs</span>' + (payload?.task?.task?.file ? '<code>' + h(payload.task.task.file) + '</code>' : '') + '</div>';
     }
 
     async function appendRunLog(run) {
@@ -1657,11 +1684,12 @@ function webDashboardHtml(): string {
       if (!run) return;
       const note = prompt("Finish note");
       if (note === null) return;
+      const taskDone = confirm("Mark linked task done too?");
       setBusy(true);
       try {
         const result = await api("/api/run-finish", {
           method: "POST",
-          body: JSON.stringify({ run, status: "success", note }),
+          body: JSON.stringify({ run, status: "success", note, taskDone }),
         });
         await load();
         renderRunActionResult(result.payload || {}, "finished");

@@ -461,6 +461,10 @@ test("web dashboard serves repo state and safe actions", async () => {
           content: "---\ntitle: Web Review\nsources:\n  - raw/source.md\n---\n# Web Review\n\nUpdated from the web workbench.\n",
         }),
       })) as { ok?: boolean; payload?: { review?: string; source?: string } };
+      const draft = (await fetchJson(`${handle.url}/api/compile-draft`, {
+        method: "POST",
+        body: JSON.stringify({ review: secondaryReviewFile }),
+      })) as { ok?: boolean; payload?: CompileDraftPayload };
       const accept = (await fetchJson(`${handle.url}/api/review-status`, {
         method: "POST",
         body: JSON.stringify({
@@ -615,6 +619,10 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(contentUpdate.ok, true);
       assert.equal(contentUpdate.payload?.review, reviewFile);
       assert.equal(contentUpdate.payload?.source, "inline content");
+      assert.equal(draft.ok, true);
+      assert.equal(draft.payload?.review, secondaryReviewFile);
+      assert.match(draft.payload?.output ?? "", /^outputs\/.+web-launch-review-draft\.md$/);
+      assert.match(await readFile(path.join(repoPath, draft.payload?.output ?? ""), "utf8"), /# Web Launch Review/);
       assert.equal(accept.ok, true);
       assert.equal(accept.payload?.previousStatus, "proposed");
       assert.equal(accept.payload?.status, "accepted");

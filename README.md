@@ -489,9 +489,9 @@ previews, and low-risk workflow actions such as saving Proposed Content,
 accepting or rejecting reviews, previewing review apply as a dry run, explicitly
 applying accepted reviews, previewing or applying recoverable agent reconcile,
 URL source ingest, local search with open-in-preview results, writing answer
-packs into outputs, refresh, bootstrap, planning multi-agent runs, and writing
-an agent launcher. Generated outputs can also be inspected and promoted into
-review artifacts from the dashboard.
+packs into outputs, drafting compile-review outputs, refresh, bootstrap,
+planning multi-agent runs, and writing an agent launcher. Generated outputs can
+also be inspected and promoted into review artifacts from the dashboard.
 
 Search the repo:
 

@@ -661,6 +661,22 @@ test("web dashboard serves repo state and safe actions", async () => {
         runs?: { items?: Array<{ file?: string; status?: string; logCount?: number }> };
         tasks?: { items?: Array<{ file?: string; status?: string }> };
       };
+      const failedRunFile = plan.payload?.assignments[1]?.run.file ?? "";
+      const failedTaskFile = plan.payload?.assignments[1]?.task.file ?? "";
+      const failedRunFinish = (await fetchJson(`${handle.url}/api/run-finish`, {
+        method: "POST",
+        body: JSON.stringify({
+          run: failedRunFile,
+          status: "failure",
+          note: "web run failed",
+          taskDone: false,
+        }),
+      })) as { ok?: boolean; payload?: RunFinishPayload & { task?: TaskDonePayload } };
+      const stateAfterFailedRunFinish = (await fetchJson(`${handle.url}/api/state`)) as {
+        ok?: boolean;
+        runs?: { items?: Array<{ file?: string; status?: string }> };
+        tasks?: { items?: Array<{ file?: string; status?: string }> };
+      };
       const draftAttach = (await fetchJson(`${handle.url}/api/review-content`, {
         method: "POST",
         body: JSON.stringify({ file: secondaryReviewFile, from: draft.payload?.output }),
@@ -841,6 +857,12 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.match(await readFile(path.join(repoPath, plannedRunFile), "utf8"), /web run log/);
       assert.match(await readFile(path.join(repoPath, plannedRunFile), "utf8"), /finished success: web run finish/);
       assert.match(await readFile(path.join(repoPath, plan.payload?.assignments[0]?.task.file ?? ""), "utf8"), /done: web run finish/);
+      assert.equal(failedRunFinish.ok, true);
+      assert.equal(failedRunFinish.payload?.run.status, "failure");
+      assert.equal(failedRunFinish.payload?.task, undefined);
+      assert.equal(stateAfterFailedRunFinish.runs?.items?.find((item) => item.file === failedRunFile)?.status, "failure");
+      assert.equal(stateAfterFailedRunFinish.tasks?.items?.find((item) => item.file === failedTaskFile)?.status, "claimed");
+      assert.match(await readFile(path.join(repoPath, failedRunFile), "utf8"), /finished failure: web run failed/);
       assert.match(plan.payload?.assignments[0]?.run.file ?? "", /^runs\/.+web-plan-a\.md$/);
       assert.match(plan.payload?.assignments[1]?.task.file ?? "", /^tasks\/.+\.md$/);
 

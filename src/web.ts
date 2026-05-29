@@ -1638,7 +1638,7 @@ function webDashboardHtml(): string {
       $("runTable").innerHTML = '<table><thead><tr><th>Run</th><th>Status</th><th>Agent</th><th>Logs</th><th></th></tr></thead><tbody>' +
         items.map((item) => {
           const running = item.status === "running";
-          return '<tr><td><code>' + h(item.file) + '</code><br>' + h(item.title) + '</td><td>' + badge(item.status) + '</td><td>' + h(item.agent) + '</td><td>' + h(item.logCount) + '</td><td><button class="button small" type="button" data-open-file="' + h(item.file) + '">Open</button> ' + (running ? '<button class="button small" type="button" data-run-log="' + h(item.file) + '">Log</button> <button class="button small primary" type="button" data-run-finish="' + h(item.file) + '">Finish</button>' : '') + '</td></tr>';
+          return '<tr><td><code>' + h(item.file) + '</code><br>' + h(item.title) + '</td><td>' + badge(item.status) + '</td><td>' + h(item.agent) + '</td><td>' + h(item.logCount) + '</td><td><button class="button small" type="button" data-open-file="' + h(item.file) + '">Open</button> ' + (running ? '<button class="button small" type="button" data-run-log="' + h(item.file) + '">Log</button> <button class="button small primary" type="button" data-run-finish="' + h(item.file) + '" data-run-status="success">Success</button> <button class="button small" type="button" data-run-finish="' + h(item.file) + '" data-run-status="failure">Failure</button>' : '') + '</td></tr>';
         }).join("") +
         '</tbody></table><div class="preview-output" id="runActionResult"></div>';
       bindFileOpenButtons();
@@ -1650,7 +1650,7 @@ function webDashboardHtml(): string {
         button.addEventListener("click", () => appendRunLog(button.getAttribute("data-run-log") || ""));
       }
       for (const button of document.querySelectorAll("[data-run-finish]")) {
-        button.addEventListener("click", () => finishRunFromDashboard(button.getAttribute("data-run-finish") || ""));
+        button.addEventListener("click", () => finishRunFromDashboard(button.getAttribute("data-run-finish") || "", button.getAttribute("data-run-status") || "success"));
       }
     }
 
@@ -1680,16 +1680,16 @@ function webDashboardHtml(): string {
       }
     }
 
-    async function finishRunFromDashboard(run) {
+    async function finishRunFromDashboard(run, status) {
       if (!run) return;
       const note = prompt("Finish note");
       if (note === null) return;
-      const taskDone = confirm("Mark linked task done too?");
+      const taskDone = status === "success" && confirm("Mark linked task done too?");
       setBusy(true);
       try {
         const result = await api("/api/run-finish", {
           method: "POST",
-          body: JSON.stringify({ run, status: "success", note, taskDone }),
+          body: JSON.stringify({ run, status, note, taskDone }),
         });
         await load();
         renderRunActionResult(result.payload || {}, "finished");

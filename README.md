@@ -497,8 +497,8 @@ pasted URL-list, and local-directory source ingest, local search with
 open-in-preview results, writing answer packs into outputs, drafting and
 attaching compile-review outputs, refresh, bootstrap, planning multi-agent runs,
 writing an agent launcher, and logging or finishing running agent runs with an
-option to mark linked tasks done. Generated outputs can also be inspected and
-promoted into review artifacts from the dashboard.
+option to mark linked tasks done on success. Generated outputs can also be
+inspected and promoted into review artifacts from the dashboard.
 
 Search the repo:
 

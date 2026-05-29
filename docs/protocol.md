@@ -735,11 +735,17 @@ It does not require embeddings, a vector database, or a running model. Results
 are ranked by term coverage, path matches, and text occurrences, then returned
 as a Markdown table with repo-local paths and snippets.
 
+Add `--json` when an agent, MCP client, or Web surface needs structured search
+results. The JSON payload includes the query, searched scopes, limit, total
+matches shown, result items with path/scope/score/snippet, and suggested inspect
+commands for the top matches.
+
 Examples:
 
 ```bash
 kforge search . --query "provenance"
 kforge search . --query "source references" --scope wiki --scope claims --limit 5
+kforge search . --query "source references" --scope wiki --json
 ```
 
 ## File Inspection

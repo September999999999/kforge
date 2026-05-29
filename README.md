@@ -483,12 +483,14 @@ navigation, review queue, task queue, runs, active agents, safe review file
 previews, and low-risk workflow actions such as saving Proposed Content,
 accepting or rejecting reviews, previewing review apply as a dry run, explicitly
 applying accepted reviews, previewing or applying recoverable agent reconcile,
-refresh, bootstrap, and writing an agent launcher.
+local search with open-in-preview results, refresh, bootstrap, and writing an
+agent launcher.
 
 Search the repo:
 
 ```bash
 kforge search ~/research/my-topic --query "provenance" --scope wiki --limit 5
+kforge search ~/research/my-topic --query "provenance" --scope wiki --json
 ```
 
 Read the wiki graph:
@@ -635,7 +637,7 @@ kforge compile draft [path] [--review <reviews/file.md>|--source <path> --target
                          create a wiki draft template for a compile review
 kforge ask [path] --question <text> [--query <text>] [--file <repo-path>] [--write]
                          create an answer pack for a question
-kforge search [path] --query <text> [--scope <scope>] [--limit <n>]
+kforge search [path] --query <text> [--scope <scope>] [--limit <n>] [--json]
                          search local text files
 kforge inspect [path] --file <repo-path>
                          inspect one repo-local file

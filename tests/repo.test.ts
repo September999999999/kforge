@@ -92,6 +92,7 @@ import {
   type RunLogPayload,
   type RunNextPayload,
   type RunStartPayload,
+  type SearchPayload,
   type SourceImportPayload,
   type SourceFetchListPayload,
   type SourceFetchPayload,
@@ -383,6 +384,10 @@ test("web dashboard serves repo state and safe actions", async () => {
         inspect?: string;
         content?: string;
       };
+      const search = (await fetchJson(`${handle.url}/api/search`, {
+        method: "POST",
+        body: JSON.stringify({ query: "compiled", scopes: ["reviews"], limit: 3 }),
+      })) as { ok?: boolean; payload?: SearchPayload };
       const contentUpdate = (await fetchJson(`${handle.url}/api/review-content`, {
         method: "POST",
         body: JSON.stringify({
@@ -497,6 +502,10 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(filePreview.file, reviewFile);
       assert.match(filePreview.inspect ?? "", /# File Inspect/);
       assert.match(filePreview.content ?? "", /# Review: Web Review/);
+      assert.equal(search.ok, true);
+      assert.equal(search.payload?.query, "compiled");
+      assert.deepEqual(search.payload?.scopes, ["reviews"]);
+      assert.equal(search.payload?.items.some((item) => item.path === reviewFile), true);
       assert.equal(contentUpdate.ok, true);
       assert.equal(contentUpdate.payload?.review, reviewFile);
       assert.equal(contentUpdate.payload?.source, "inline content");
@@ -2455,13 +2464,21 @@ test("search finds text matches and respects scopes", async () => {
 
     const allResults = searchRepo(repoPath, { query: "provenance", limit: 5 });
     const wikiOnly = searchRepo(repoPath, { query: "provenance", scopes: ["wiki"], limit: 5 });
+    const json = JSON.parse(searchRepo(repoPath, { query: "provenance", scopes: ["wiki"], limit: 5, json: true }).messages[0]) as SearchPayload;
 
     assert.equal(allResults.ok, true);
     assert.match(allResults.messages[0], /raw\/source\.md/);
     assert.match(allResults.messages[0], /wiki\/Provenance\.md/);
+    assert.match(allResults.messages[0], /Next:/);
     assert.equal(wikiOnly.ok, true);
     assert.doesNotMatch(wikiOnly.messages[0], /raw\/source\.md/);
     assert.match(wikiOnly.messages[0], /wiki\/Provenance\.md/);
+    assert.equal(json.ok, true);
+    assert.equal(json.query, "provenance");
+    assert.deepEqual(json.scopes, ["wiki"]);
+    assert.equal(json.items.length, 1);
+    assert.equal(json.items[0]?.path, "wiki/Provenance.md");
+    assert.match(json.next.join("\n"), /kforge inspect/);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }

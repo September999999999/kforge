@@ -13,6 +13,7 @@ import {
   refreshRepo,
   applyReview,
   reviewQueue,
+  searchRepo,
   taskList,
   updateReviewContent,
   updateReviewStatus,
@@ -123,6 +124,23 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
       }
       const result = webFilePayload(repoPath, file);
       sendJson(response, result.ok ? 200 : 400, result);
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/search") {
+      const body = await readJsonBody(request);
+      const query = optionalString(body.query);
+      if (!query) {
+        sendJson(response, 400, { ok: false, error: "search query is required" });
+        return;
+      }
+      const result = searchRepo(repoPath, {
+        query,
+        scopes: searchScopes(body.scopes),
+        limit: positiveNumber(body.limit),
+        json: true,
+      });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
       return;
     }
 
@@ -368,6 +386,14 @@ function stringList(value: unknown): string[] {
       .filter(Boolean);
   }
   return [];
+}
+
+function searchScopes(value: unknown): Array<"raw" | "wiki" | "claims" | "reviews" | "outputs"> | undefined {
+  const scopes = stringList(value).filter(
+    (scope): scope is "raw" | "wiki" | "claims" | "reviews" | "outputs" =>
+      scope === "raw" || scope === "wiki" || scope === "claims" || scope === "reviews" || scope === "outputs",
+  );
+  return scopes.length > 0 ? scopes : undefined;
 }
 
 function optionalString(value: unknown): string | undefined {
@@ -810,6 +836,7 @@ function webDashboardHtml(): string {
       <div class="repo" id="repoPath">Loading repo</div>
       <nav>
         <a href="#overview">Overview</a>
+        <a href="#search">Search</a>
         <a href="#files">Files</a>
         <a href="#reviews">Reviews</a>
         <a href="#agents">Agents</a>
@@ -854,6 +881,18 @@ function webDashboardHtml(): string {
           <section id="files">
             <div class="section-head"><h2>Files</h2><span class="subtle" id="fileSummary"></span></div>
             <div class="section-body" id="fileList"><div class="empty">Loading files.</div></div>
+          </section>
+          <section id="search">
+            <div class="section-head"><h2>Search</h2><span class="subtle" id="searchSummary"></span></div>
+            <div class="section-body">
+              <form id="searchForm">
+                <label>Query <input name="query" type="search" placeholder="provenance source references"></label>
+                <label>Scopes <input name="scopes" placeholder="raw, wiki, claims"></label>
+                <label>Limit <input name="limit" type="number" min="1" max="50" placeholder="10"></label>
+                <button class="button primary" type="submit">Search</button>
+              </form>
+              <div class="preview-output" id="searchResults"></div>
+            </div>
           </section>
           <section id="agents">
             <div class="section-head"><h2>Agents</h2><span class="subtle" id="agentSummary"></span></div>
@@ -952,6 +991,20 @@ function webDashboardHtml(): string {
       $("fileList").innerHTML = '<div class="file-list">' +
         items.map((item) => '<button class="file-row" type="button" data-open-file="' + h(item.file) + '"><strong>' + h(item.file) + '</strong><span>' + h(item.scope) + ' · ' + h(item.size || 0) + ' bytes</span></button>').join("") +
         '</div>';
+      bindFileOpenButtons();
+    }
+
+    function renderSearchResults(payload) {
+      const items = payload?.items || [];
+      $("searchSummary").textContent = h(payload?.query || "") + (payload?.total !== undefined ? " · " + h(payload.total) + " matches" : "");
+      if (!items.length) {
+        $("searchResults").innerHTML = '<div class="empty">No matches found.</div>';
+        return;
+      }
+      $("searchResults").innerHTML =
+        '<table><thead><tr><th>File</th><th>Scope</th><th>Score</th><th>Snippet</th><th></th></tr></thead><tbody>' +
+        items.map((item) => '<tr><td><code>' + h(item.path) + '</code></td><td>' + h(item.scope) + '</td><td>' + h(item.score) + '</td><td>' + h(item.snippet) + '</td><td><button class="button small" type="button" data-open-file="' + h(item.path) + '">Open</button></td></tr>').join("") +
+        '</tbody></table>';
       bindFileOpenButtons();
     }
 
@@ -1242,6 +1295,27 @@ function webDashboardHtml(): string {
         });
         await load();
         toast("Bootstrap staged");
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    });
+    $("searchForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      setBusy(true);
+      try {
+        const result = await api("/api/search", {
+          method: "POST",
+          body: JSON.stringify({
+            query: String(form.get("query") || ""),
+            scopes: list(form.get("scopes")),
+            limit: Number(form.get("limit")) || undefined,
+          }),
+        });
+        renderSearchResults(result.payload || {});
+        toast("Search returned " + (result.payload?.total ?? 0) + " match(es)");
       } catch (error) {
         toast(error.message || String(error));
       } finally {

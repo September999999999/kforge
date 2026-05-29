@@ -829,6 +829,25 @@ export interface SearchOptions {
   query: string;
   limit?: number;
   scopes?: SearchScope[];
+  json?: boolean;
+}
+
+export interface SearchResultItem {
+  path: string;
+  scope: SearchScope;
+  score: number;
+  snippet: string;
+}
+
+export interface SearchPayload {
+  ok: true;
+  updatedAt: string;
+  query: string;
+  scopes: SearchScope[];
+  limit: number;
+  total: number;
+  items: SearchResultItem[];
+  next: string[];
 }
 
 export interface InspectOptions {
@@ -1756,7 +1775,12 @@ export function searchRepo(repoPath: string, options: SearchOptions): CommandRes
     .sort((left, right) => right.score - left.score || left.path.localeCompare(right.path))
     .slice(0, limit);
 
-  return { ok: true, messages: [searchResultsMarkdown(options.query, results)] };
+  const payload = searchPayload(options.query, scopes, limit, results);
+  if (options.json) {
+    return { ok: true, messages: [JSON.stringify(payload, null, 2)] };
+  }
+
+  return { ok: true, messages: [searchResultsMarkdown(payload)] };
 }
 
 export function inspectRepo(repoPath: string, options: InspectOptions): CommandResult {
@@ -5100,18 +5124,11 @@ function metric(label: string, numerator: number, denominator: number): ScoreMet
   return { label, value, line: `- ${label}: ${value}% (${numerator}/${denominator})` };
 }
 
-interface SearchResult {
-  path: string;
-  scope: SearchScope;
-  score: number;
-  snippet: string;
-}
-
-function searchScope(repoPath: string, scope: SearchScope, terms: string[]): SearchResult[] {
+function searchScope(repoPath: string, scope: SearchScope, terms: string[]): SearchResultItem[] {
   return iterFiles(path.join(repoPath, scope))
     .filter(isSearchableFile)
     .map((file) => scoreFile(repoPath, scope, file, terms))
-    .filter((result): result is SearchResult => result !== undefined);
+    .filter((result): result is SearchResultItem => result !== undefined);
 }
 
 function scoreFile(
@@ -5119,7 +5136,7 @@ function scoreFile(
   scope: SearchScope,
   file: string,
   terms: string[],
-): SearchResult | undefined {
+): SearchResultItem | undefined {
   const rel = toRepoPath(repoPath, file);
   const text = readText(file);
   const haystack = `${rel}\n${text}`.toLowerCase();
@@ -5141,10 +5158,34 @@ function scoreFile(
   };
 }
 
-function searchResultsMarkdown(query: string, results: SearchResult[]): string {
-  const lines = [GENERATED_HEADER, "# Search Results", "", `Query: ${query}`, ""];
+function searchPayload(query: string, scopes: SearchScope[], limit: number, results: SearchResultItem[]): SearchPayload {
+  return {
+    ok: true,
+    updatedAt: today(),
+    query,
+    scopes,
+    limit,
+    total: results.length,
+    items: results,
+    next:
+      results.length > 0
+        ? results.slice(0, 3).map((result) => `kforge inspect . --file ${shellQuote(result.path)}`)
+        : ["kforge source list .", "kforge compile plan ."],
+  };
+}
 
-  if (results.length === 0) {
+function searchResultsMarkdown(payload: SearchPayload): string {
+  const lines = [
+    GENERATED_HEADER,
+    "# Search Results",
+    "",
+    `Query: ${payload.query}`,
+    `Scopes: ${payload.scopes.join(", ")}`,
+    `Showing: ${payload.total}/${payload.limit}`,
+    "",
+  ];
+
+  if (payload.items.length === 0) {
     lines.push("No matches found.");
     lines.push("");
     return lines.join("\n");
@@ -5152,10 +5193,15 @@ function searchResultsMarkdown(query: string, results: SearchResult[]): string {
 
   lines.push("| Path | Scope | Score | Snippet |");
   lines.push("| --- | --- | ---: | --- |");
-  for (const result of results) {
+  for (const result of payload.items) {
     lines.push(
       `| \`${result.path}\` | ${result.scope} | ${result.score} | ${escapeTableCell(result.snippet)} |`,
     );
+  }
+  lines.push("");
+  lines.push("Next:");
+  for (const command of payload.next) {
+    lines.push(`- \`${command}\``);
   }
   lines.push("");
   return lines.join("\n");

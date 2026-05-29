@@ -634,14 +634,16 @@ export function createKforgeMcpServer(options: McpOptions = {}): McpServer {
         query: z.string().min(1),
         scopes: z.array(scopeSchema).optional(),
         limit: z.number().int().positive().optional(),
+        json: z.boolean().optional(),
       }),
     },
-    async ({ path: repoPath, query, scopes, limit }) =>
+    async ({ path: repoPath, query, scopes, limit, json }) =>
       runAsTool(() =>
         searchRepo(toolRepoPath(defaultRepoPath, repoPath), {
           query,
           scopes: scopes as SearchScope[] | undefined,
           limit,
+          json,
         }),
       ),
   );

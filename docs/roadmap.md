@@ -100,7 +100,7 @@ Goal: make the protocol usable from common AI and PKM environments.
   review writeback, accepted apply, and finish smoke coverage
 - Obsidian vault entry note through `kforge obsidian`
 - Obsidian helper plugin or command palette bridge
-- local search service
+- local search service through CLI, MCP, and Web dashboard
 - optional Rust search/index acceleration only if profiling shows it is needed
 
 ## Milestone 5: Trust CI

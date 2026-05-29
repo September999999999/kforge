@@ -77,7 +77,8 @@ accepts a `path` argument when an agent needs to operate on a different repo.
 - `kforge_agent_finish`: finish one agent's current run and optionally mark the
   linked task done
 - `kforge_graph`: read or write the wiki backlinks and orphan report
-- `kforge_search`: search local repo text
+- `kforge_search`: search local repo text; set `json` for structured
+  path/scope/score/snippet results
 - `kforge_inspect`: inspect one repo-local file
 - `kforge_compile`: create a source-to-wiki compile brief
 - `kforge_compile_plan`: read or write the raw-to-wiki compile queue; set

@@ -752,6 +752,7 @@ function runSearchCommand(args: string[]): CommandResult {
   const query = oneOption(parsed.options, "query");
   const limitValue = oneOption(parsed.options, "limit", false);
   const scopes = parseScopes(manyOptions(parsed.options, "scope"));
+  const json = flagOption(parsed.options, "json");
 
   if (!query) {
     throw new Error("Missing required option: --query");
@@ -759,7 +760,7 @@ function runSearchCommand(args: string[]): CommandResult {
 
   const limit = limitValue ? parsePositiveInteger(limitValue, "--limit") : undefined;
 
-  return searchRepo(repoPath, { query, limit, scopes });
+  return searchRepo(repoPath, { query, limit, scopes, json });
 }
 
 async function runSourceCommand(args: string[]): Promise<CommandResult> {
@@ -1147,7 +1148,7 @@ Usage:
                                                        create a wiki draft template for a compile review
   kforge ask [path] --question <text> [--query <text>] [--file <repo-path>] [--write]
                                                        create an answer pack for a question
-  kforge search [path] --query <text> [--scope <scope>] [--limit <n>]
+  kforge search [path] --query <text> [--scope <scope>] [--limit <n>] [--json]
                                                        search text files in the repo
   kforge inspect [path] --file <repo-path>             inspect one repo-local file
   kforge pack [path] --task <text> [--query <text>] [--file <repo-path>] [--write]

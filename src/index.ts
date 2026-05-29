@@ -154,6 +154,8 @@ export {
   type RunStatusFilter,
   type ScoreOptions,
   type SearchOptions,
+  type SearchPayload,
+  type SearchResultItem,
   type SearchScope,
   type TaskClaimOptions,
   type TaskClaimPayload,

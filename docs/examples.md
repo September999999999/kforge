@@ -356,6 +356,22 @@ running assignments. The command template supports `{agent}`, `{task}`, `{run}`,
 `{prompt}`, `{log}`, and `{repo}`. Add `--exec` when the local worker command is
 ready and you want the launcher to run immediately.
 
+For fresh imports, dispatch combines bootstrap, run assignment, and launcher
+creation:
+
+```bash
+kforge agent dispatch ./my-topic \
+  --agent agent-a \
+  --agent agent-b \
+  --agent agent-c \
+  --command 'codex exec --prompt {prompt}' \
+  --write \
+  --json
+```
+
+Run the same command with `--dry-run --json` first when you want a safe preview
+of the reviews, tasks, runs, and launcher workers it would create.
+
 Inspect the shared board while agents are working:
 
 ```bash

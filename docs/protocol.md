@@ -601,6 +601,11 @@ existing running assignments for the named agents. Command templates can use
 `{agent}`, `{task}`, `{run}`, `{prompt}`, `{log}`, and `{repo}` placeholders.
 With `--write`, the launcher is saved under `runs/`; with `--exec`, it is saved
 and run immediately.
+`agent dispatch` is the one-command path for newly ingested source material. It
+runs the bootstrap pipeline, assigns review-backed runs for the requested
+agents, then prepares or executes the parallel launcher from those exact runs.
+Use `--dry-run --json` to preview the compile reviews, tasks, and runs before
+writing scripts.
 The Web dashboard mirrors this: Plan Runs assigns workers, auto-fills the
 launcher form, and can reuse those existing planned runs when writing the
 launcher script. The result links each worker's task, run, and pre-created log

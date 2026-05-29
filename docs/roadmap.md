@@ -98,6 +98,8 @@ Goal: make the protocol usable from common AI and PKM environments.
 - Web dashboard controls to plan multi-agent runs from one review queue
 - provider-neutral parallel agent launch scripts, including CLI, JSON, and MCP
   surfaces
+- one-command parallel dispatch through `kforge agent dispatch`, combining
+  bootstrap, run assignment, and launcher preparation for fresh research queues
 - Web dashboard launcher flow that can reuse the exact planned agent batch
 - Web dashboard launcher result links for worker tasks, runs, and logs
 - Web dashboard controls to log and finish running agent runs as success or

@@ -11,6 +11,7 @@ import { VERSION } from "./version.js";
 import {
   addSource,
   agentBoard,
+  agentDispatch,
   agentDraft,
   agentFinish,
   agentLaunch,
@@ -579,6 +580,27 @@ export function createKforgeMcpServer(options: McpOptions = {}): McpServer {
     },
     async ({ path: repoPath, agents, command, limit, note, noPlan, write, exec, json }) =>
       runAsTool(() => agentLaunch(toolRepoPath(defaultRepoPath, repoPath), { agents, command, limit, note, noPlan, write, exec, json })),
+  );
+
+  server.registerTool(
+    "kforge_agent_dispatch",
+    {
+      title: "Dispatch parallel agent work",
+      description: "Bootstrap queued research work and prepare or execute a launcher for multiple agent workers.",
+      inputSchema: z.object({
+        path: repoPathSchema,
+        agents: z.array(z.string().min(1)).min(1),
+        command: z.string().optional(),
+        limit: z.number().int().positive().optional(),
+        note: z.string().optional(),
+        dryRun: z.boolean().optional(),
+        write: z.boolean().optional(),
+        exec: z.boolean().optional(),
+        json: z.boolean().optional(),
+      }),
+    },
+    async ({ path: repoPath, agents, command, limit, note, dryRun, write, exec, json }) =>
+      runAsTool(() => agentDispatch(toolRepoPath(defaultRepoPath, repoPath), { agents, command, limit, note, dryRun, write, exec, json })),
   );
 
   server.registerTool(

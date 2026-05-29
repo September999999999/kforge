@@ -315,6 +315,21 @@ workers, then "Reuse existing planned runs" writes a launcher for that exact
 batch. The launcher result links each worker's task, run, and pre-created log
 file back into the Web file preview.
 
+When you want one command from fresh sources to parallel worker scripts, use
+dispatch:
+
+```bash
+kforge agent dispatch ./my-topic \
+  --agent agent-a \
+  --agent agent-b \
+  --command 'codex exec --prompt {prompt}' \
+  --write \
+  --json
+```
+
+Add `--dry-run --json` to preview the bootstrap and launcher counts before
+writing run assignments or scripts.
+
 Check the shared board when several agents are active:
 
 ```bash

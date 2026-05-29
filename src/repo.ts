@@ -697,6 +697,17 @@ export interface AgentLaunchOptions {
   json?: boolean;
 }
 
+export interface AgentDispatchOptions {
+  agents: string[];
+  command?: string;
+  limit?: number;
+  note?: string;
+  dryRun?: boolean;
+  write?: boolean;
+  exec?: boolean;
+  json?: boolean;
+}
+
 export interface AgentPlanAssignment {
   agent: string;
   task: TaskItem;
@@ -741,6 +752,24 @@ export interface AgentLaunchPayload {
   written: boolean;
   executed: boolean;
   exitCode?: number;
+  next: string[];
+}
+
+export interface AgentDispatchPayload {
+  ok: boolean;
+  updatedAt: string;
+  dryRun: boolean;
+  agents: string[];
+  bootstrap: BootstrapPayload;
+  launch?: AgentLaunchPayload;
+  counts: {
+    agentsRequested: number;
+    compileReviewsCreated: number;
+    compileReviewsWouldCreate: number;
+    tasksCreated: number;
+    agentRunsStarted: number;
+    launchWorkers: number;
+  };
   next: string[];
 }
 
@@ -3093,6 +3122,42 @@ export function agentLaunch(repoPath: string, options: AgentLaunchOptions): Comm
   });
 
   return agentLaunchResult(payload, options.json);
+}
+
+export function agentDispatch(repoPath: string, options: AgentDispatchOptions): CommandResult {
+  requireRepo(repoPath);
+
+  const agents = [...new Set(options.agents.map((agent) => agent.trim()).filter(Boolean))];
+  if (agents.length === 0) {
+    return { ok: false, messages: ["agent dispatch requires at least one --agent"] };
+  }
+
+  const bootstrapResult = bootstrapRepo(repoPath, {
+    agents,
+    limit: options.limit,
+    note: options.note,
+    dryRun: options.dryRun,
+    json: true,
+  });
+  if (!bootstrapResult.ok) {
+    return bootstrapResult;
+  }
+  const bootstrap = JSON.parse(bootstrapResult.messages[0]) as BootstrapPayload;
+
+  let launch: AgentLaunchPayload | undefined;
+  if (!options.dryRun) {
+    launch = agentLaunchFromAssignments(repoPath, {
+      agents,
+      command: options.command,
+      write: options.write,
+      exec: options.exec,
+      planned: bootstrap.agentPlan,
+      fallbackToExisting: true,
+    });
+  }
+
+  const payload = agentDispatchPayload(agents, bootstrap, launch);
+  return agentDispatchResult(payload, options.json);
 }
 
 export function agentStep(repoPath: string, options: AgentStepOptions): CommandResult {
@@ -7135,6 +7200,60 @@ function agentLaunchItem(repoPath: string, assignment: AgentPlanAssignment, comm
   };
 }
 
+function agentLaunchFromAssignments(
+  repoPath: string,
+  input: {
+    agents: string[];
+    command?: string;
+    planned?: AgentPlanPayload;
+    fallbackToExisting?: boolean;
+    write?: boolean;
+    exec?: boolean;
+  },
+): AgentLaunchPayload {
+  const commandTemplate = input.command?.trim() || "kforge agent step . --agent {agent} --json";
+  const assignments =
+    input.planned?.assignments && input.planned.assignments.length > 0
+      ? input.planned.assignments
+      : input.fallbackToExisting
+        ? input.agents.flatMap((agent) => currentAgentLaunchAssignment(repoPath, agent))
+        : [];
+  const items = assignments.map((assignment) => agentLaunchItem(repoPath, assignment, commandTemplate));
+  const scriptContent = agentLaunchScript(repoPath, items);
+  let scriptFile: string | undefined;
+
+  if (input.write || input.exec) {
+    ensureAgentLaunchLogFiles(repoPath, items);
+    scriptFile = writeAgentLaunchScript(repoPath, scriptContent);
+  }
+
+  let executed = false;
+  let exitCode: number | undefined;
+  if (input.exec) {
+    if (!scriptFile) {
+      throw new Error("agent launch internal error: missing launch script");
+    }
+    const result = spawnSync("bash", [path.resolve(repoPath, scriptFile)], {
+      cwd: repoPath,
+      stdio: "inherit",
+    });
+    executed = true;
+    exitCode = result.status ?? 1;
+  }
+
+  return agentLaunchPayload({
+    commandTemplate,
+    source: input.planned?.assignments.length ? "planned" : "existing",
+    ...(input.planned ? { planned: input.planned } : {}),
+    items,
+    scriptContent,
+    scriptFile,
+    written: Boolean(scriptFile),
+    executed,
+    exitCode,
+  });
+}
+
 function agentLaunchPrompt(assignment: AgentPlanAssignment): string {
   return [
     `You are ${assignment.agent}, working inside this kforge knowledge repo.`,
@@ -7309,6 +7428,75 @@ function agentLaunchResult(payload: AgentLaunchPayload, json: boolean | undefine
     "",
     ...(payload.script.file ? [`- file: \`${payload.script.file}\``, ""] : []),
     fencedBlock("bash", payload.script.content.trimEnd()),
+    "",
+    "## Next",
+    "",
+    ...payload.next.map((command) => `- \`${command}\``),
+    "",
+  ];
+
+  return { ok: payload.ok, messages: [lines.join("\n")] };
+}
+
+function agentDispatchPayload(agents: string[], bootstrap: BootstrapPayload, launch: AgentLaunchPayload | undefined): AgentDispatchPayload {
+  const launchWorkers = launch?.items.length ?? 0;
+  const next = uniqueStrings([
+    ...(launch?.next ?? []),
+    ...bootstrap.next,
+    "kforge agent board . --json",
+    "kforge ci . --json",
+  ]);
+
+  return {
+    ok: bootstrap.ok && (launch?.ok ?? true),
+    updatedAt: today(),
+    dryRun: bootstrap.dryRun,
+    agents,
+    bootstrap,
+    ...(launch ? { launch } : {}),
+    counts: {
+      agentsRequested: agents.length,
+      compileReviewsCreated: bootstrap.counts.compileReviewsCreated,
+      compileReviewsWouldCreate: bootstrap.counts.compileReviewsWouldCreate,
+      tasksCreated: bootstrap.counts.tasksCreated,
+      agentRunsStarted: bootstrap.counts.agentRunsStarted,
+      launchWorkers,
+    },
+    next,
+  };
+}
+
+function agentDispatchResult(payload: AgentDispatchPayload, json: boolean | undefined): CommandResult {
+  if (json) {
+    return { ok: payload.ok, messages: [JSON.stringify(payload, null, 2)] };
+  }
+
+  const lines = [
+    "# Agent Dispatch",
+    "",
+    `Updated: ${payload.updatedAt}`,
+    `Dry run: ${payload.dryRun ? "yes" : "no"}`,
+    `Agents requested: ${payload.counts.agentsRequested}`,
+    `Compile reviews created: ${payload.counts.compileReviewsCreated}`,
+    `Compile reviews would create: ${payload.counts.compileReviewsWouldCreate}`,
+    `Tasks created: ${payload.counts.tasksCreated}`,
+    `Agent runs started: ${payload.counts.agentRunsStarted}`,
+    `Launch workers: ${payload.counts.launchWorkers}`,
+    "",
+    "## Agents",
+    "",
+    ...payload.agents.map((agent) => `- ${agent}`),
+    "",
+    "## Launch",
+    "",
+    ...(payload.launch
+      ? [
+          `- source: ${payload.launch.source}`,
+          `- written: ${payload.launch.written ? payload.launch.script.file : "no"}`,
+          `- executed: ${payload.launch.executed ? "yes" : "no"}`,
+          ...(payload.launch.executed ? [`- exit code: ${payload.launch.exitCode ?? 0}`] : []),
+        ]
+      : ["No launcher prepared during dry run."]),
     "",
     "## Next",
     "",

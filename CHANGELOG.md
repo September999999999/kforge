@@ -43,6 +43,9 @@ Initial public prototype.
 - Parallel-agent task coordination with `kforge task seed`, `task list`,
   `task claim`, `task next`, `task done`, `task release`, JSON output, and
   matching MCP tools.
+- One-command parallel dispatch with `kforge agent dispatch` and
+  `kforge_agent_dispatch`, combining bootstrap, run assignment, and launcher
+  preparation.
 - Auditable agent run records with `kforge run next`, `run start`, `run list`,
   `run inspect`, `run log`, `run finish`, JSON output, and matching MCP tools.
 - Machine-readable compile planning and review staging with

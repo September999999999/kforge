@@ -34,6 +34,7 @@ test("cli help exposes the public command surface", async () => {
   assert.match(result.stdout, /kforge agent reconcile \[path\] \[--write\] \[--json\]/);
   assert.match(result.stdout, /kforge agent plan \[path\].*--agent <name>.*--agent <name>.*\[--json\]/);
   assert.match(result.stdout, /kforge agent launch \[path\].*--agent <name>.*--agent <name>.*\[--exec\].*\[--json\]/);
+  assert.match(result.stdout, /kforge agent dispatch \[path\].*--agent <name>.*--agent <name>.*\[--dry-run\].*\[--json\]/);
   assert.match(result.stdout, /kforge agent finish \[path\].*--agent <name>.*\[--task-done\].*\[--json\]/);
   assert.match(result.stdout, /kforge agent list/);
   assert.match(result.stdout, /kforge agent install \[path\]/);
@@ -454,6 +455,76 @@ test("cli agent launch writes a parallel worker launcher", async () => {
     assert.match(payload.script?.content ?? "", /pids=\(\)/);
     assert.match(payload.next?.join("\n") ?? "", /bash runs\//);
     assert.match(await readFile(path.join(repoPath, payload.script?.file ?? ""), "utf8"), /cli-launch-b/);
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test("cli agent dispatch bootstraps and writes a parallel launcher", async () => {
+  const repoPath = await mkdtemp(path.join(tmpdir(), "kforge-cli-agent-dispatch-"));
+  try {
+    await runCli(["init", repoPath]);
+    await writeFile(path.join(repoPath, "raw", "dispatch-one.md"), "# Dispatch One\n", "utf8");
+    await writeFile(path.join(repoPath, "raw", "dispatch-two.md"), "# Dispatch Two\n", "utf8");
+
+    const dryRun = await runCli([
+      "agent",
+      "dispatch",
+      repoPath,
+      "--agent",
+      "cli-dispatch-a",
+      "--agent",
+      "cli-dispatch-b",
+      "--limit",
+      "2",
+      "--dry-run",
+      "--json",
+    ]);
+    const dryRunPayload = JSON.parse(dryRun.stdout) as {
+      dryRun?: boolean;
+      counts?: { compileReviewsWouldCreate?: number; agentRunsStarted?: number };
+      launch?: unknown;
+    };
+
+    const dispatch = await runCli([
+      "agent",
+      "dispatch",
+      repoPath,
+      "--agent",
+      "cli-dispatch-a",
+      "--agent",
+      "cli-dispatch-b",
+      "--limit",
+      "2",
+      "--command",
+      "printf {agent}:{task}",
+      "--write",
+      "--json",
+    ]);
+    const payload = JSON.parse(dispatch.stdout) as {
+      counts?: { compileReviewsCreated?: number; tasksCreated?: number; agentRunsStarted?: number; launchWorkers?: number };
+      bootstrap?: { agentPlan?: { assignments?: Array<{ agent?: string; task?: { file?: string }; run?: { file?: string } }> } };
+      launch?: { source?: string; written?: boolean; script?: { file?: string }; items?: Array<{ agent?: string; command?: string; log?: string }> };
+      next?: string[];
+    };
+
+    assert.equal(dryRun.exitCode, 0);
+    assert.equal(dryRunPayload.dryRun, true);
+    assert.equal(dryRunPayload.counts?.compileReviewsWouldCreate, 2);
+    assert.equal(dryRunPayload.counts?.agentRunsStarted, 0);
+    assert.equal(dryRunPayload.launch, undefined);
+    assert.equal(dispatch.exitCode, 0);
+    assert.equal(payload.counts?.compileReviewsCreated, 2);
+    assert.equal(payload.counts?.tasksCreated, 2);
+    assert.equal(payload.counts?.agentRunsStarted, 2);
+    assert.equal(payload.counts?.launchWorkers, 2);
+    assert.equal(payload.launch?.source, "planned");
+    assert.equal(payload.launch?.written, true);
+    assert.equal(payload.launch?.items?.[0]?.agent, "cli-dispatch-a");
+    assert.match(payload.launch?.items?.[0]?.command ?? "", /printf cli-dispatch-a:tasks\//);
+    assert.match(payload.next?.join("\n") ?? "", /kforge agent board/);
+    assert.match(await readFile(path.join(repoPath, payload.launch?.script?.file ?? ""), "utf8"), /cli-dispatch-b/);
+    assert.match(await readFile(path.join(repoPath, payload.bootstrap?.agentPlan?.assignments?.[0]?.run?.file ?? ""), "utf8"), /cli-dispatch-a/);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }

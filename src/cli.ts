@@ -7,6 +7,7 @@ import { serveWebDashboard } from "./web.js";
 import {
   addSource,
   agentBoard,
+  agentDispatch,
   agentDraft,
   agentFinish,
   agentLaunch,
@@ -719,6 +720,24 @@ function runAgentCommand(args: string[]): CommandResult {
     return agentLaunch(repoPath, { agents, command, limit, note, noPlan, write, exec, json });
   }
 
+  if (subcommand === "dispatch") {
+    const parsed = parseArgs(rest);
+    const repoPath = resolveRepoPath(parsed.positionals[0] ?? ".");
+    const agents = manyOptions(parsed.options, "agent");
+    const command = oneOption(parsed.options, "command", false);
+    const limitValue = oneOption(parsed.options, "limit", false);
+    const note = oneOption(parsed.options, "note", false);
+    const dryRun = flagOption(parsed.options, "dry-run");
+    const write = flagOption(parsed.options, "write");
+    const exec = flagOption(parsed.options, "exec");
+    const json = flagOption(parsed.options, "json");
+    const limit = limitValue ? parsePositiveInteger(limitValue, "--limit") : undefined;
+    if (agents.length === 0) {
+      throw new Error("Missing required option: --agent");
+    }
+    return agentDispatch(repoPath, { agents, command, limit, note, dryRun, write, exec, json });
+  }
+
   if (subcommand === "finish") {
     const parsed = parseArgs(rest);
     const repoPath = resolveRepoPath(parsed.positionals[0] ?? ".");
@@ -756,7 +775,7 @@ function runAgentCommand(args: string[]): CommandResult {
   }
 
   throw new Error(
-    "Usage: kforge agent next [path] --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]\n       kforge agent step [path] --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]\n       kforge agent draft [path] --agent <name> [--run <runs/file.md>] [--json]\n       kforge agent status [path] --agent <name> [--json]\n       kforge agent board [path] [--json]\n       kforge agent plan [path] --agent <name> --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]\n       kforge agent launch [path] --agent <name> --agent <name> [--command <template>] [--write] [--exec] [--json]\n       kforge agent finish [path] --agent <name> [--run <runs/file.md>] [--status <success|failure>] [--task-done] [--note <text>] [--json]\n       kforge agent list\n       kforge agent print [--template <agents|claude|cursor|generic>]\n       kforge agent install [path] [--template <agents|claude|cursor|generic>] [--force]",
+    "Usage: kforge agent next [path] --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]\n       kforge agent step [path] --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]\n       kforge agent draft [path] --agent <name> [--run <runs/file.md>] [--json]\n       kforge agent status [path] --agent <name> [--json]\n       kforge agent board [path] [--json]\n       kforge agent plan [path] --agent <name> --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]\n       kforge agent launch [path] --agent <name> --agent <name> [--command <template>] [--write] [--exec] [--json]\n       kforge agent dispatch [path] --agent <name> --agent <name> [--command <template>] [--limit <n>] [--dry-run] [--write] [--exec] [--json]\n       kforge agent finish [path] --agent <name> [--run <runs/file.md>] [--status <success|failure>] [--task-done] [--note <text>] [--json]\n       kforge agent list\n       kforge agent print [--template <agents|claude|cursor|generic>]\n       kforge agent install [path] [--template <agents|claude|cursor|generic>] [--force]",
   );
 }
 
@@ -1164,6 +1183,8 @@ Usage:
                                                        assign independent runs to multiple agents
   kforge agent launch [path] --agent <name> --agent <name> [--command <template>] [--write] [--exec] [--json]
                                                        generate or run a parallel worker launcher
+  kforge agent dispatch [path] --agent <name> --agent <name> [--command <template>] [--limit <n>] [--dry-run] [--write] [--exec] [--json]
+                                                       bootstrap work and prepare parallel workers
   kforge agent finish [path] --agent <name> [--run <runs/file.md>] [--status <success|failure>] [--task-done] [--note <text>] [--json]
                                                        finish the current agent run
   kforge agent list                                     list installable agent instruction templates

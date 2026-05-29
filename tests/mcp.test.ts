@@ -60,6 +60,7 @@ test("mcp server exposes kforge tools over stdio", async () => {
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_reconcile"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_plan"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_launch"), true);
+    assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_dispatch"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_finish"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_compile"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_compile_plan"), true);
@@ -280,6 +281,36 @@ test("mcp server exposes kforge tools over stdio", async () => {
     assert.equal(sourceImportPayload.items?.[0]?.action, "imported");
     assert.equal(sourceImportPayload.items?.[0]?.source, "raw/mcp-json-bulk.md");
     assert.equal(sourceImportPayload.items?.[0]?.metadata, "raw/_meta/mcp-json-bulk.md");
+
+    const dispatchTempRepo = await mkdtemp(path.join(tmpdir(), "kforge-mcp-dispatch-"));
+    initRepo(dispatchTempRepo);
+    await writeFile(path.join(dispatchTempRepo, "raw", "dispatch-source.md"), "# Dispatch Source\n", "utf8");
+    const agentDispatchResult = await client.callTool({
+      name: "kforge_agent_dispatch",
+      arguments: {
+        path: dispatchTempRepo,
+        agents: ["mcp-dispatch-a"],
+        command: "printf {agent}:{run}",
+        limit: 1,
+        write: true,
+        json: true,
+      },
+    });
+    const agentDispatchPayload = JSON.parse(firstText(agentDispatchResult.content)) as {
+      counts?: { compileReviewsCreated?: number; tasksCreated?: number; agentRunsStarted?: number; launchWorkers?: number };
+      launch?: { source?: string; written?: boolean; items?: Array<{ agent?: string; command?: string }>; script?: { file?: string } };
+      next?: string[];
+    };
+    assert.equal(agentDispatchPayload.counts?.compileReviewsCreated, 1);
+    assert.equal(agentDispatchPayload.counts?.tasksCreated, 1);
+    assert.equal(agentDispatchPayload.counts?.agentRunsStarted, 1);
+    assert.equal(agentDispatchPayload.counts?.launchWorkers, 1);
+    assert.equal(agentDispatchPayload.launch?.source, "planned");
+    assert.equal(agentDispatchPayload.launch?.written, true);
+    assert.match(agentDispatchPayload.launch?.items?.[0]?.command ?? "", /printf mcp-dispatch-a:runs\//);
+    assert.match(agentDispatchPayload.next?.join("\n") ?? "", /kforge agent board/);
+    assert.match(await readFile(path.join(dispatchTempRepo, agentDispatchPayload.launch?.script?.file ?? ""), "utf8"), /mcp-dispatch-a/);
+    await rm(dispatchTempRepo, { recursive: true, force: true });
 
     const sourceInspect = await client.callTool({
       name: "kforge_source_inspect",

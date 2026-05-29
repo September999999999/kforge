@@ -409,6 +409,22 @@ agents; enable "Reuse existing planned runs" to write a launcher for that exact
 batch instead of planning new work. The launcher result links each worker's
 task, run, and pre-created log file back into the Web file preview.
 
+For a newly ingested repo, dispatch does the whole bootstrap-to-launch sequence
+in one command:
+
+```bash
+kforge agent dispatch ~/research/my-topic \
+  --agent agent-a \
+  --agent agent-b \
+  --agent agent-c \
+  --command 'codex exec --prompt {prompt}' \
+  --write \
+  --json
+```
+
+Use `--dry-run --json` first when you want to preview how many compile reviews,
+tasks, and worker runs would be created before writing launcher files.
+
 Edit the generated `outputs/...-draft.md`, then attach it to the review:
 
 ```bash
@@ -637,6 +653,8 @@ kforge agent plan [path] --agent <name> --agent <name> [--limit <n>] [--no-seed]
                          assign independent runs to multiple agents
 kforge agent launch [path] --agent <name> --agent <name> [--command <template>] [--write] [--exec] [--json]
                          generate or run a parallel worker launcher
+kforge agent dispatch [path] --agent <name> --agent <name> [--command <template>] [--limit <n>] [--dry-run] [--write] [--exec] [--json]
+                         bootstrap work and prepare parallel workers
 kforge agent finish [path] --agent <name> [--run <runs/file.md>] [--status <success|failure>] [--task-done] [--note <text>] [--json]
                          finish the current agent run
 kforge agent list        list installable agent instruction templates

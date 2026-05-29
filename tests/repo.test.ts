@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import {
   addSource,
   agentBoard,
+  agentDispatch,
   agentDraft,
   agentFinish,
   agentLaunch,
@@ -70,6 +71,7 @@ import {
   updateReviewStatus,
   workflowRepo,
   type AgentBoardPayload,
+  type AgentDispatchPayload,
   type AgentDraftPayload,
   type AgentFinishPayload,
   type AgentLaunchPayload,
@@ -2044,6 +2046,51 @@ test("agent launch prepares a parallel worker script", async () => {
     assert.equal(executed.executed, true);
     assert.equal(executed.exitCode, 0);
     assert.match(await readFile(path.join(repoPath, executed.items[0]?.log ?? ""), "utf8"), /launch-a:runs\//);
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test("agent dispatch bootstraps work and prepares a launcher", async () => {
+  const repoPath = await tempRepoPath();
+  try {
+    initRepo(repoPath);
+    await writeFile(path.join(repoPath, "raw", "dispatch-one.md"), "# Dispatch One\n", "utf8");
+    await writeFile(path.join(repoPath, "raw", "dispatch-two.md"), "# Dispatch Two\n", "utf8");
+
+    const dryRun = JSON.parse(
+      agentDispatch(repoPath, { agents: ["dispatch-a", "dispatch-b"], limit: 2, dryRun: true, json: true }).messages[0],
+    ) as AgentDispatchPayload;
+    assert.equal(dryRun.dryRun, true);
+    assert.equal(dryRun.counts.compileReviewsWouldCreate, 2);
+    assert.equal(dryRun.counts.agentRunsStarted, 0);
+    assert.equal(dryRun.launch, undefined);
+
+    const payload = JSON.parse(
+      agentDispatch(repoPath, {
+        agents: ["dispatch-a", "dispatch-b"],
+        command: "printf {agent}:{run}",
+        limit: 2,
+        note: "dispatch start",
+        write: true,
+        json: true,
+      }).messages[0],
+    ) as AgentDispatchPayload;
+
+    assert.equal(payload.ok, true);
+    assert.equal(payload.dryRun, false);
+    assert.deepEqual(payload.agents, ["dispatch-a", "dispatch-b"]);
+    assert.equal(payload.counts.compileReviewsCreated, 2);
+    assert.equal(payload.counts.tasksCreated, 2);
+    assert.equal(payload.counts.agentRunsStarted, 2);
+    assert.equal(payload.counts.launchWorkers, 2);
+    assert.equal(payload.launch?.source, "planned");
+    assert.equal(payload.launch?.written, true);
+    assert.match(payload.launch?.script.file ?? "", /^runs\/.+agent-launch.*\.sh$/);
+    assert.match(payload.launch?.items[0]?.command ?? "", /^printf dispatch-a:runs\//);
+    assert.match(payload.next.join("\n"), /kforge agent board/);
+    assert.match(await readFile(path.join(repoPath, payload.launch?.script.file ?? ""), "utf8"), /dispatch-b/);
+    assert.match(await readFile(path.join(repoPath, payload.launch?.items[0]?.run.file ?? ""), "utf8"), /dispatch start/);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }

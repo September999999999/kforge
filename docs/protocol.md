@@ -261,7 +261,8 @@ the same inspect path checks as the CLI. Its write actions intentionally stay
 narrow: save structured Proposed Content, accept or reject review artifacts,
 preview review apply as a dry run, explicitly apply accepted review content,
 refresh derived indexes, bootstrap review-first work, and write an agent launcher
-script. The apply path uses the same accepted-review checks as `kforge review
+script. It can also plan multi-agent runs from the same review queue before a
+launcher is generated. The apply path uses the same accepted-review checks as `kforge review
 apply`.
 
 `kforge bootstrap` is the deterministic startup pipeline for a newly ingested

@@ -2729,7 +2729,7 @@ export function agentPlan(repoPath: string, options: AgentPlanOptions): CommandR
 
   let seeded = taskSeedPayload(0, []);
   if (options.seed !== false) {
-    const seedResult = seedTasks(repoPath, { limit: Math.max(options.limit ?? agents.length, agents.length), json: true });
+    const seedResult = seedTasks(repoPath, { limit: agentPlanSeedLimit(repoPath, agents.length, options.limit), json: true });
     if (!seedResult.ok) {
       return seedResult;
     }
@@ -2811,6 +2811,31 @@ export function agentPlan(repoPath: string, options: AgentPlanOptions): CommandR
   ];
 
   return { ok: true, messages: [lines.join("\n")] };
+}
+
+function agentPlanSeedLimit(repoPath: string, agentCount: number, requestedLimit: number | undefined): number {
+  const baseLimit = Math.max(requestedLimit ?? agentCount, agentCount);
+  const existingTasks = taskItems(repoPath);
+  const openTasks = existingTasks.filter((task) => task.status === "open").length;
+  const neededNewTasks = Math.max(agentCount - openTasks, 0);
+  if (neededNewTasks === 0) {
+    return baseLimit;
+  }
+
+  const existingSources = new Set(existingTasks.map((task) => task.source));
+  const candidates = reviewQueueItems(repoPath).filter((item) => reviewQueueStatusMatches(item, "actionable"));
+  let scanLimit = 0;
+  let seedable = 0;
+  for (const candidate of candidates) {
+    scanLimit += 1;
+    if (!existingSources.has(candidate.file)) {
+      seedable += 1;
+    }
+    if (seedable >= neededNewTasks) {
+      break;
+    }
+  }
+  return Math.max(baseLimit, scanLimit);
 }
 
 export function agentLaunch(repoPath: string, options: AgentLaunchOptions): CommandResult {

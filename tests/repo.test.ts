@@ -511,6 +511,26 @@ test("web dashboard serves repo state and safe actions", async () => {
           board?: { counts?: { runsWithoutClaimedTask?: number } };
         };
       };
+      createReview(repoPath, {
+        title: "Web Plan One",
+        targets: ["wiki/Web Plan One.md"],
+        sources: ["raw/source.md"],
+        kind: "compile",
+      });
+      createReview(repoPath, {
+        title: "Web Plan Two",
+        targets: ["wiki/Web Plan Two.md"],
+        sources: ["raw/source.md"],
+        kind: "compile",
+      });
+      const plan = (await fetchJson(`${handle.url}/api/agent-plan`, {
+        method: "POST",
+        body: JSON.stringify({
+          agents: ["web-plan-a", "web-plan-b"],
+          limit: 2,
+          note: "web plan",
+        }),
+      })) as { ok?: boolean; payload?: AgentPlanPayload };
 
       assert.match(html, /Knowledge Repo Dashboard/);
       assert.match(html, /File Preview/);
@@ -591,6 +611,12 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(reconcileApply.payload?.board?.counts?.runsWithoutClaimedTask, 0);
       assert.match(await readFile(launchedTaskPath, "utf8"), /Status: claimed/);
       assert.match(await readFile(launchedTaskPath, "utf8"), /Owner: web-a/);
+      assert.equal(plan.ok, true);
+      assert.equal(plan.payload?.requested, 2);
+      assert.equal(plan.payload?.started, 2);
+      assert.equal(plan.payload?.assignments.map((item) => item.agent).join(","), "web-plan-a,web-plan-b");
+      assert.match(plan.payload?.assignments[0]?.run.file ?? "", /^runs\/.+web-plan-a\.md$/);
+      assert.match(plan.payload?.assignments[1]?.task.file ?? "", /^tasks\/.+\.md$/);
 
       const outside = await fetch(`${handle.url}/api/file?path=${encodeURIComponent("../outside.md")}`);
       assert.equal(outside.status, 400);

@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   agentBoard,
   agentLaunch,
+  agentPlan,
   agentReconcile,
   askRepo,
   bootstrapRepo,
@@ -271,6 +272,21 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
       const agents = stringList(body.agents);
       const limit = positiveNumber(body.limit);
       const result = bootstrapRepo(repoPath, { agents, limit, json: true });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/agent-plan") {
+      const body = await readJsonBody(request);
+      const agents = stringList(body.agents);
+      const limit = positiveNumber(body.limit);
+      const result = agentPlan(repoPath, {
+        agents,
+        limit,
+        note: optionalString(body.note),
+        seed: !Boolean(body.noSeed),
+        json: true,
+      });
       sendJson(response, result.ok ? 200 : 400, commandResponse(result));
       return;
     }
@@ -995,6 +1011,13 @@ function webDashboardHtml(): string {
           <section>
             <div class="section-head"><h2>Agent Launch</h2></div>
             <div class="section-body">
+              <form id="planForm">
+                <label>Agents <textarea name="agents" placeholder="agent-a, agent-b"></textarea></label>
+                <label>Limit <input name="limit" type="number" min="1" placeholder="2"></label>
+                <label>Note <input name="note" placeholder="Planned from the web dashboard"></label>
+                <button class="button" type="submit">Plan Runs</button>
+              </form>
+              <div class="preview-output" id="planResult"></div>
               <form id="launchForm">
                 <label>Agents <textarea name="agents" placeholder="agent-a, agent-b"></textarea></label>
                 <label>Command <textarea name="command" placeholder="codex exec --prompt {prompt}"></textarea></label>
@@ -1421,6 +1444,19 @@ function webDashboardHtml(): string {
       }
     }
 
+    function renderPlanResult(payload) {
+      const rows = (payload?.assignments || []).length
+        ? '<table><thead><tr><th>Agent</th><th>Task</th><th>Run</th><th>Next</th></tr></thead><tbody>' +
+          payload.assignments.map((item) => '<tr><td>' + h(item.agent) + '</td><td><code>' + h(item.task?.file || "-") + '</code></td><td><code>' + h(item.run?.file || "-") + '</code></td><td><code>' + h((item.next || [])[0] || "-") + '</code></td></tr>').join("") +
+          '</tbody></table>'
+        : '<div class="empty">No runs planned.</div>';
+      $("planResult").innerHTML =
+        '<div class="viewer-meta"><span class="status ok">planned</span><span>' +
+        h(payload?.started ?? 0) + '/' + h(payload?.requested ?? 0) +
+        ' runs</span></div>' +
+        rows;
+    }
+
     function badge(status) {
       const value = h(status || "-");
       const cls = status === "success" || status === "done" || status === "applied" || status === "accepted" ? "ok" : status === "failure" ? "bad" : "warn";
@@ -1502,6 +1538,28 @@ function webDashboardHtml(): string {
           await openFile(payload.output);
         }
         toast("Answer pack written: " + (payload.output || "outputs/"));
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    });
+    $("planForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      setBusy(true);
+      try {
+        const result = await api("/api/agent-plan", {
+          method: "POST",
+          body: JSON.stringify({
+            agents: list(form.get("agents")),
+            limit: Number(form.get("limit")) || undefined,
+            note: String(form.get("note") || ""),
+          }),
+        });
+        await load();
+        renderPlanResult(result.payload || {});
+        toast("Planned " + (result.payload?.started ?? 0) + " run(s)");
       } catch (error) {
         toast(error.message || String(error));
       } finally {

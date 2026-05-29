@@ -70,7 +70,7 @@ previews, and safe actions for saving Proposed Content, accepting or rejecting
 reviews, previewing review apply as a dry run, explicitly applying accepted
 reviews, previewing or applying recoverable agent reconcile, refresh, bootstrap,
 local search with open-in-preview results, answer-pack writing, output promotion
-into reviews, and writing agent launch scripts.
+into reviews, planning multi-agent runs, and writing agent launch scripts.
 
 Create a compact handoff packet:
 

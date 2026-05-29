@@ -95,6 +95,7 @@ import {
   type RunStartPayload,
   type SearchPayload,
   type ClaimReviewDriftPayload,
+  type ScorePayload,
   type SourceImportPayload,
   type SourceFetchListPayload,
   type SourceFetchPayload,
@@ -2854,6 +2855,8 @@ test("score reports trust metrics for an example repo", async () => {
     initRepo(repoPath, { example: true });
 
     const result = scoreRepo(repoPath);
+    const jsonResult = scoreRepo(repoPath, { json: true });
+    const payload = JSON.parse(jsonResult.messages[0]) as ScorePayload;
 
     assert.equal(result.ok, true);
     assert.match(result.messages[0], /# Trust Score/);
@@ -2863,6 +2866,12 @@ test("score reports trust metrics for an example repo", async () => {
     assert.match(result.messages[0], /review source coverage: 100%/);
     assert.match(result.messages[0], /review debt clearance: 0%/);
     assert.match(result.messages[0], /doctor health: clean/);
+    assert.equal(jsonResult.ok, true);
+    assert.equal(payload.trustScore, 83);
+    assert.equal(payload.counts.rawSources, 1);
+    assert.equal(payload.counts.openReviews, 1);
+    assert.equal(payload.metrics.some((item) => item.label === "review debt clearance" && item.value === 0), true);
+    assert.equal(payload.doctor.ok, true);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }

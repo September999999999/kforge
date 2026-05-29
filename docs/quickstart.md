@@ -104,6 +104,7 @@ Check trust metrics:
 
 ```bash
 kforge score .
+kforge score . --json
 ```
 
 Read wiki backlinks and orphan pages:

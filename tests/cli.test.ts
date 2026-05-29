@@ -19,6 +19,7 @@ test("cli help exposes the public command surface", async () => {
   assert.match(result.stdout, /kforge bootstrap \[path\].*\[--agent <name>\].*\[--json\]/);
   assert.match(result.stdout, /kforge refresh \[path\]/);
   assert.match(result.stdout, /kforge doctor \[path\] \[--write\] \[--json\]/);
+  assert.match(result.stdout, /kforge score \[path\] \[--write\] \[--json\]/);
   assert.match(result.stdout, /kforge handoff \[path\] \[--write\]/);
   assert.match(result.stdout, /kforge workflow \[path\] \[--write\]/);
   assert.match(result.stdout, /kforge dashboard \[path\] \[--write\] \[--json\]/);
@@ -82,6 +83,7 @@ test("cli can run the documented demo workflow", async () => {
     const claimAudit = await runCli(["claim", "audit", repoPath, "--json"]);
     const claimReviewDrift = await runCli(["claim", "review-drift", repoPath, "--dry-run"]);
     const claimReviewDriftJson = await runCli(["claim", "review-drift", repoPath, "--dry-run", "--json"]);
+    const scoreJson = await runCli(["score", repoPath, "--json"]);
     const doctor = await runCli(["doctor", repoPath, "--write"]);
 
     assert.equal(init.exitCode, 0);
@@ -126,6 +128,8 @@ test("cli can run the documented demo workflow", async () => {
     assert.match(claimReviewDrift.stdout, /No source drift warnings found|Would create .* stale review/);
     assert.equal(claimReviewDriftJson.exitCode, 0);
     assert.equal(JSON.parse(claimReviewDriftJson.stdout).dryRun, true);
+    assert.equal(scoreJson.exitCode, 0);
+    assert.equal(JSON.parse(scoreJson.stdout).trustScore, 83);
     assert.equal(doctor.exitCode, 0);
     assert.match(doctor.stdout, /indexes\/doctor.md/);
     assert.match(await readFile(path.join(repoPath, "indexes", "doctor.md"), "utf8"), /Status: clean/);

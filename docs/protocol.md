@@ -655,9 +655,12 @@ Examples:
 ```bash
 kforge score .
 kforge score . --write
+kforge score . --json
 ```
 
-With `--write`, the report is saved to `indexes/score.md`.
+With `--write`, the report is saved to `indexes/score.md`. With `--json`, stdout
+becomes a machine-readable Trust CI payload with counts, metrics, doctor status,
+and next commands.
 
 ## Compile Briefs
 

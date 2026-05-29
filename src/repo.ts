@@ -316,6 +316,27 @@ export interface BootstrapPayload {
 
 export interface ScoreOptions {
   write?: boolean;
+  json?: boolean;
+}
+
+export interface ScorePayload {
+  ok: true;
+  updatedAt: string;
+  trustScore?: number;
+  counts: {
+    rawSources: number;
+    wikiPages: number;
+    claims: number;
+    reviews: number;
+    outputs: number;
+    openReviews: number;
+  };
+  metrics: ScoreMetric[];
+  doctor: {
+    ok: boolean;
+    messages: string[];
+  };
+  next: string[];
 }
 
 export interface ClaimAuditOptions {
@@ -1677,7 +1698,12 @@ export function handoffRepo(repoPath: string, options: HandoffOptions = {}): Com
 export function scoreRepo(repoPath: string, options: ScoreOptions = {}): CommandResult {
   requireRepo(repoPath);
 
-  const content = scoreReport(repoPath);
+  const payload = scorePayload(repoPath);
+  if (options.json) {
+    return { ok: true, messages: [JSON.stringify(payload, null, 2)] };
+  }
+
+  const content = scoreReportFromPayload(payload);
   if (options.write) {
     const target = path.join(repoPath, "indexes", "score.md");
     mkdirSyncish(path.dirname(target));
@@ -5262,7 +5288,7 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
-function scoreReport(repoPath: string): string {
+function scorePayload(repoPath: string): ScorePayload {
   const rawFiles = rawSourceFiles(repoPath);
   const wikiFiles = iterFiles(path.join(repoPath, "wiki"));
   const claimFiles = iterFiles(path.join(repoPath, "claims"));
@@ -5270,31 +5296,56 @@ function scoreReport(repoPath: string): string {
   const outputFiles = iterFiles(path.join(repoPath, "outputs"));
   const doctor = doctorRepo(repoPath);
   const { metrics, openReviews, trustScore } = trustScoreData(repoPath);
+  return {
+    ok: true,
+    updatedAt: today(),
+    ...(trustScore === undefined ? {} : { trustScore }),
+    counts: {
+      rawSources: rawFiles.length,
+      wikiPages: wikiFiles.length,
+      claims: claimFiles.length,
+      reviews: reviewFiles.length,
+      outputs: outputFiles.length,
+      openReviews,
+    },
+    metrics,
+    doctor: {
+      ok: doctor.ok,
+      messages: doctor.messages,
+    },
+    next: doctor.ok
+      ? ["kforge refresh .", "kforge score . --json"]
+      : ["kforge doctor . --json", "kforge index .", "kforge score . --json"],
+  };
+}
+
+function scoreReportFromPayload(payload: ScorePayload): string {
+  const trustScore = payload.trustScore;
 
   const lines = [
     GENERATED_HEADER,
     "# Trust Score",
     "",
-    `Updated: ${today()}`,
+    `Updated: ${payload.updatedAt}`,
     "",
-    `Trust Score: ${trustScore}/100`,
+    `Trust Score: ${trustScore === undefined ? "n/a" : `${trustScore}/100`}`,
     "",
     "## Repo Counts",
     "",
-    `- raw sources: ${rawFiles.length}`,
-    `- wiki pages: ${wikiFiles.length}`,
-    `- claims: ${claimFiles.length}`,
-    `- reviews: ${reviewFiles.length}`,
-    `- outputs: ${outputFiles.length}`,
+    `- raw sources: ${payload.counts.rawSources}`,
+    `- wiki pages: ${payload.counts.wikiPages}`,
+    `- claims: ${payload.counts.claims}`,
+    `- reviews: ${payload.counts.reviews}`,
+    `- outputs: ${payload.counts.outputs}`,
     "",
     "## Coverage",
     "",
-    ...metrics.map((item) => item.line),
-    `- open review debt: ${openReviews}/${reviewFiles.length}`,
+    ...payload.metrics.map((item) => item.line),
+    `- open review debt: ${payload.counts.openReviews}/${payload.counts.reviews}`,
     "",
     "## Doctor",
     "",
-    ...doctor.messages.map((message) => `- ${message}`),
+    ...payload.doctor.messages.map((message) => `- ${message}`),
     "",
     "## Notes",
     "",

@@ -121,7 +121,7 @@ Goal: make the protocol usable from common AI and PKM environments.
 Goal: make knowledge quality testable.
 
 - CI-friendly doctor checks
-- trust score command
+- trust score command, including JSON output for CI and agent thresholds
 - Web dashboard health/lint panel
 - link integrity checks
 - provenance coverage score

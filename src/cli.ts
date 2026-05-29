@@ -215,7 +215,7 @@ function runRepoCommand(
   }
 
   if (command === "score") {
-    return scoreRepo(repoPath, { write });
+    return scoreRepo(repoPath, { write, json });
   }
 
   if (command === "context") {
@@ -1119,7 +1119,7 @@ Usage:
   kforge index [path]                                  generate inventory files
   kforge refresh [path]                                refresh indexes and derived reports
   kforge doctor [path] [--write] [--json]              run health checks
-  kforge score [path] [--write]                        print or write a trust score report
+  kforge score [path] [--write] [--json]               print or write a trust score report
   kforge context [path] [--write]                      print or write an agent context pack
   kforge dashboard [path] [--write] [--json]           print or write an Obsidian-friendly status dashboard
   kforge obsidian [path] [--write] [--bridge] [--json] print/write an Obsidian entry or command bridge

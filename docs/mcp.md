@@ -137,7 +137,8 @@ accepts a `path` argument when an agent needs to operate on a different repo.
 - `kforge_review_apply`: apply accepted structured review content to a wiki or
   claim target; set `json` for dry-run content or applied target output
 - `kforge_doctor`: run structural health checks and optionally write `indexes/doctor.md`
-- `kforge_score`: read or write the trust score report
+- `kforge_score`: read or write the trust score report; set `json` for
+  machine-readable counts, metrics, doctor status, and next commands
 
 ## Safety Model
 

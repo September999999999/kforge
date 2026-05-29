@@ -895,6 +895,16 @@ test("mcp server exposes kforge tools over stdio", async () => {
     });
     assert.equal(JSON.parse(firstText(claimReviewDrift.content)).dryRun, true);
 
+    const score = await client.callTool({
+      name: "kforge_score",
+      arguments: {
+        json: true,
+      },
+    });
+    const scorePayload = JSON.parse(firstText(score.content)) as { trustScore?: number; metrics?: Array<{ label?: string }> };
+    assert.equal(typeof scorePayload.trustScore, "number");
+    assert.equal(scorePayload.metrics?.some((item) => item.label === "doctor health"), true);
+
     const status = await client.callTool({
       name: "kforge_review_status",
       arguments: {

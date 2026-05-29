@@ -1281,10 +1281,11 @@ export function createKforgeMcpServer(options: McpOptions = {}): McpServer {
       inputSchema: z.object({
         path: repoPathSchema,
         write: z.boolean().optional(),
+        json: z.boolean().optional(),
       }),
     },
-    async ({ path: repoPath, write }) =>
-      runAsTool(() => scoreRepo(toolRepoPath(defaultRepoPath, repoPath), { write })),
+    async ({ path: repoPath, write, json }) =>
+      runAsTool(() => scoreRepo(toolRepoPath(defaultRepoPath, repoPath), { write, json })),
   );
 
   return server;

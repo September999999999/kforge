@@ -78,7 +78,7 @@ Use this release if you want:
 - `kforge doctor` checks repo structure, source references, review targets,
   broken wikilinks, stale generated indexes, and symlink boundaries.
 - `kforge score` summarizes provenance, review debt, target coverage, and
-  doctor health.
+  doctor health, with JSON output for Trust CI thresholds.
 - `kforge claim audit` and `claim review-drift` surface source drift and review
   debt, with JSON output for stale-review automation.
 - Review quality gates block acceptance, apply, and accepted output promotion

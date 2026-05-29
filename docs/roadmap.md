@@ -100,6 +100,7 @@ Goal: make the protocol usable from common AI and PKM environments.
   surfaces
 - Web dashboard launcher flow that can reuse the exact planned agent batch
 - Web dashboard launcher result links for worker tasks, runs, and logs
+- Web dashboard controls to log and finish running agent runs
 - multi-agent board state with active runs, claimed tasks, and coordination gap
   detection
 - explicit multi-agent reconcile command for recoverable coordination drift

@@ -13,11 +13,13 @@ import {
   doctorRepo,
   fetchSource,
   fetchSources,
+  finishRun,
   importSources,
   inspectRepo,
   inspectOutput,
   listOutputs,
   listRuns,
+  logRun,
   promoteOutput,
   refreshRepo,
   applyReview,
@@ -396,6 +398,32 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
         note: optionalString(body.note) ?? "Reconciled from kforge web dashboard.",
         json: true,
       });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/run-log") {
+      const body = await readJsonBody(request);
+      const run = optionalString(body.run);
+      const message = optionalString(body.message);
+      if (!run || !message) {
+        sendJson(response, 400, { ok: false, error: "run and message are required" });
+        return;
+      }
+      const result = logRun(repoPath, { run, message, json: true });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/run-finish") {
+      const body = await readJsonBody(request);
+      const run = optionalString(body.run);
+      const status = body.status === "success" || body.status === "failure" ? body.status : undefined;
+      if (!run || !status) {
+        sendJson(response, 400, { ok: false, error: "run and status are required" });
+        return;
+      }
+      const result = finishRun(repoPath, { run, status, note: optionalString(body.note), json: true });
       sendJson(response, result.ok ? 200 : 400, commandResponse(result));
       return;
     }
@@ -1581,9 +1609,68 @@ function webDashboardHtml(): string {
         return;
       }
       $("runTable").innerHTML = '<table><thead><tr><th>Run</th><th>Status</th><th>Agent</th><th>Logs</th><th></th></tr></thead><tbody>' +
-        items.map((item) => '<tr><td><code>' + h(item.file) + '</code><br>' + h(item.title) + '</td><td>' + badge(item.status) + '</td><td>' + h(item.agent) + '</td><td>' + h(item.logCount) + '</td><td><button class="button small" type="button" data-open-file="' + h(item.file) + '">Open</button></td></tr>').join("") +
-        '</tbody></table>';
+        items.map((item) => {
+          const running = item.status === "running";
+          return '<tr><td><code>' + h(item.file) + '</code><br>' + h(item.title) + '</td><td>' + badge(item.status) + '</td><td>' + h(item.agent) + '</td><td>' + h(item.logCount) + '</td><td><button class="button small" type="button" data-open-file="' + h(item.file) + '">Open</button> ' + (running ? '<button class="button small" type="button" data-run-log="' + h(item.file) + '">Log</button> <button class="button small primary" type="button" data-run-finish="' + h(item.file) + '">Finish</button>' : '') + '</td></tr>';
+        }).join("") +
+        '</tbody></table><div class="preview-output" id="runActionResult"></div>';
       bindFileOpenButtons();
+      bindRunActionButtons();
+    }
+
+    function bindRunActionButtons() {
+      for (const button of document.querySelectorAll("[data-run-log]")) {
+        button.addEventListener("click", () => appendRunLog(button.getAttribute("data-run-log") || ""));
+      }
+      for (const button of document.querySelectorAll("[data-run-finish]")) {
+        button.addEventListener("click", () => finishRunFromDashboard(button.getAttribute("data-run-finish") || ""));
+      }
+    }
+
+    function renderRunActionResult(payload, label) {
+      const target = $("runActionResult");
+      if (!target) return;
+      target.innerHTML = '<div class="viewer-meta"><span class="status ok">' + h(label) + '</span><code>' + h(payload?.run?.file || "") + '</code><span>' + h(payload?.run?.status || "") + '</span><span>' + h(payload?.run?.logCount ?? 0) + ' logs</span></div>';
+    }
+
+    async function appendRunLog(run) {
+      if (!run) return;
+      const message = prompt("Run log message");
+      if (!message) return;
+      setBusy(true);
+      try {
+        const result = await api("/api/run-log", {
+          method: "POST",
+          body: JSON.stringify({ run, message }),
+        });
+        await load();
+        renderRunActionResult(result.payload || {}, "logged");
+        toast("Logged " + run);
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function finishRunFromDashboard(run) {
+      if (!run) return;
+      const note = prompt("Finish note");
+      if (note === null) return;
+      setBusy(true);
+      try {
+        const result = await api("/api/run-finish", {
+          method: "POST",
+          body: JSON.stringify({ run, status: "success", note }),
+        });
+        await load();
+        renderRunActionResult(result.payload || {}, "finished");
+        toast("Finished " + run);
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
     }
 
     function renderAgents(agents) {

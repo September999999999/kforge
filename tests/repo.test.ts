@@ -639,6 +639,26 @@ test("web dashboard serves repo state and safe actions", async () => {
           noPlan: true,
         }),
       })) as { ok?: boolean; payload?: AgentLaunchPayload };
+      const plannedRunFile = plan.payload?.assignments[0]?.run.file ?? "";
+      const runLog = (await fetchJson(`${handle.url}/api/run-log`, {
+        method: "POST",
+        body: JSON.stringify({
+          run: plannedRunFile,
+          message: "web run log",
+        }),
+      })) as { ok?: boolean; payload?: RunLogPayload };
+      const runFinish = (await fetchJson(`${handle.url}/api/run-finish`, {
+        method: "POST",
+        body: JSON.stringify({
+          run: plannedRunFile,
+          status: "success",
+          note: "web run finish",
+        }),
+      })) as { ok?: boolean; payload?: RunFinishPayload };
+      const stateAfterRunFinish = (await fetchJson(`${handle.url}/api/state`)) as {
+        ok?: boolean;
+        runs?: { items?: Array<{ file?: string; status?: string; logCount?: number }> };
+      };
       const draftAttach = (await fetchJson(`${handle.url}/api/review-content`, {
         method: "POST",
         body: JSON.stringify({ file: secondaryReviewFile, from: draft.payload?.output }),
@@ -809,6 +829,13 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.match(plannedLaunch.payload?.items?.[0]?.log ?? "", /^runs\/.+launch-web-plan-a.*\.log$/);
       assert.equal((await fetchJson(`${handle.url}/api/file?path=${encodeURIComponent(plannedLaunch.payload?.items?.[0]?.run.file ?? "")}`) as { ok?: boolean }).ok, true);
       assert.equal((await fetchJson(`${handle.url}/api/file?path=${encodeURIComponent(plannedLaunch.payload?.items?.[0]?.log ?? "")}`) as { ok?: boolean }).ok, true);
+      assert.equal(runLog.ok, true);
+      assert.equal(runLog.payload?.run.file, plannedRunFile);
+      assert.equal(runFinish.ok, true);
+      assert.equal(runFinish.payload?.run.status, "success");
+      assert.equal(stateAfterRunFinish.runs?.items?.find((item) => item.file === plannedRunFile)?.status, "success");
+      assert.match(await readFile(path.join(repoPath, plannedRunFile), "utf8"), /web run log/);
+      assert.match(await readFile(path.join(repoPath, plannedRunFile), "utf8"), /finished success: web run finish/);
       assert.match(plan.payload?.assignments[0]?.run.file ?? "", /^runs\/.+web-plan-a\.md$/);
       assert.match(plan.payload?.assignments[1]?.task.file ?? "", /^tasks\/.+\.md$/);
 

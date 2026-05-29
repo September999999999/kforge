@@ -598,6 +598,9 @@ existing running assignments for the named agents. Command templates can use
 `{agent}`, `{task}`, `{run}`, `{prompt}`, `{log}`, and `{repo}` placeholders.
 With `--write`, the launcher is saved under `runs/`; with `--exec`, it is saved
 and run immediately.
+The Web dashboard mirrors this: Plan Runs assigns workers, auto-fills the
+launcher form, and can reuse those existing planned runs when writing the
+launcher script.
 `agent finish` closes the current run for an agent and can mark the linked task
 done with `--task-done`.
 `run next` remains available as the lower-level task/run command.

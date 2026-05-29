@@ -631,6 +631,14 @@ test("web dashboard serves repo state and safe actions", async () => {
           note: "web plan",
         }),
       })) as { ok?: boolean; payload?: AgentPlanPayload };
+      const plannedLaunch = (await fetchJson(`${handle.url}/api/agent-launch`, {
+        method: "POST",
+        body: JSON.stringify({
+          agents: plan.payload?.assignments.map((item) => item.agent),
+          command: "printf reuse-{agent}:{run}",
+          noPlan: true,
+        }),
+      })) as { ok?: boolean; payload?: AgentLaunchPayload };
       const draftAttach = (await fetchJson(`${handle.url}/api/review-content`, {
         method: "POST",
         body: JSON.stringify({ file: secondaryReviewFile, from: draft.payload?.output }),
@@ -788,6 +796,14 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(plan.payload?.requested, 2);
       assert.equal(plan.payload?.started, 2);
       assert.equal(plan.payload?.assignments.map((item) => item.agent).join(","), "web-plan-a,web-plan-b");
+      assert.equal(plannedLaunch.ok, true);
+      assert.equal(plannedLaunch.payload?.source, "existing");
+      assert.equal(plannedLaunch.payload?.items?.length, 2);
+      assert.deepEqual(
+        plannedLaunch.payload?.items?.map((item) => item.run.file),
+        plan.payload?.assignments.map((item) => item.run.file),
+      );
+      assert.match(await readFile(path.join(repoPath, plannedLaunch.payload?.script?.file ?? ""), "utf8"), /reuse-web-plan-a/);
       assert.match(plan.payload?.assignments[0]?.run.file ?? "", /^runs\/.+web-plan-a\.md$/);
       assert.match(plan.payload?.assignments[1]?.task.file ?? "", /^tasks\/.+\.md$/);
 

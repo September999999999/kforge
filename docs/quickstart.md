@@ -304,6 +304,9 @@ kforge agent launch ./my-topic \
 
 The command template can use `{agent}`, `{task}`, `{run}`, `{prompt}`, `{log}`,
 and `{repo}`. Add `--exec` to run the generated shell launcher immediately.
+The Web dashboard has the same two-step flow: Plan Runs assigns distinct
+workers, then "Reuse existing planned runs" writes a launcher for that exact
+batch.
 
 Check the shared board when several agents are active:
 

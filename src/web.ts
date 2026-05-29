@@ -375,8 +375,10 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
       const body = await readJsonBody(request);
       const agents = stringList(body.agents);
       const command = optionalString(body.command);
+      const limit = positiveNumber(body.limit);
+      const note = optionalString(body.note);
       const noPlan = Boolean(body.noPlan);
-      const result = agentLaunch(repoPath, { agents, command, noPlan, write: true, json: true });
+      const result = agentLaunch(repoPath, { agents, command, limit, note, noPlan, write: true, json: true });
       sendJson(response, result.ok ? 200 : 400, commandResponse(result));
       return;
     }
@@ -1139,9 +1141,13 @@ function webDashboardHtml(): string {
               <div class="preview-output" id="planResult"></div>
               <form id="launchForm">
                 <label>Agents <textarea name="agents" placeholder="agent-a, agent-b"></textarea></label>
+                <label>Limit <input name="limit" type="number" min="1" placeholder="2"></label>
+                <label>Note <input name="note" placeholder="Launched from the web dashboard"></label>
                 <label>Command <textarea name="command" placeholder="codex exec --prompt {prompt}"></textarea></label>
+                <label><input name="noPlan" type="checkbox"> Reuse existing planned runs</label>
                 <button class="button primary" type="submit">Write Launcher</button>
               </form>
+              <div class="preview-output" id="launchResult"></div>
             </div>
           </section>
           <div class="toast" id="toast"></div>
@@ -1649,6 +1655,7 @@ function webDashboardHtml(): string {
     }
 
     function renderPlanResult(payload) {
+      const assignments = payload?.assignments || [];
       const rows = (payload?.assignments || []).length
         ? '<table><thead><tr><th>Agent</th><th>Task</th><th>Run</th><th>Next</th></tr></thead><tbody>' +
           payload.assignments.map((item) => '<tr><td>' + h(item.agent) + '</td><td><code>' + h(item.task?.file || "-") + '</code></td><td><code>' + h(item.run?.file || "-") + '</code></td><td><code>' + h((item.next || [])[0] || "-") + '</code></td></tr>').join("") +
@@ -1658,6 +1665,24 @@ function webDashboardHtml(): string {
         '<div class="viewer-meta"><span class="status ok">planned</span><span>' +
         h(payload?.started ?? 0) + '/' + h(payload?.requested ?? 0) +
         ' runs</span></div>' +
+        rows;
+      if (assignments.length > 0) {
+        const agents = assignments.map((item) => item.agent).join(", ");
+        $("launchForm").elements.agents.value = agents;
+        $("launchForm").elements.noPlan.checked = true;
+      }
+    }
+
+    function renderLaunchResult(payload) {
+      const items = payload?.items || [];
+      const rows = items.length
+        ? '<table><thead><tr><th>Agent</th><th>Task</th><th>Run</th><th>Log</th></tr></thead><tbody>' +
+          items.map((item) => '<tr><td>' + h(item.agent) + '</td><td><code>' + h(item.task?.file || "-") + '</code></td><td><code>' + h(item.run?.file || "-") + '</code></td><td><code>' + h(item.log || "-") + '</code></td></tr>').join("") +
+          '</tbody></table>'
+        : '<div class="empty">No launcher workers prepared.</div>';
+      $("launchResult").innerHTML =
+        '<div class="viewer-meta"><span class="status ok">' + h(payload?.source || "launcher") + '</span><span>' +
+        h(items.length) + ' worker(s)</span><code>' + h(payload?.script?.file || "not written") + '</code></div>' +
         rows;
     }
 
@@ -1908,10 +1933,14 @@ function webDashboardHtml(): string {
           method: "POST",
           body: JSON.stringify({
             agents: list(form.get("agents")),
+            limit: Number(form.get("limit")) || undefined,
+            note: String(form.get("note") || ""),
             command: String(form.get("command") || ""),
+            noPlan: form.get("noPlan") === "on",
           }),
         });
         await load();
+        renderLaunchResult(result.payload || {});
         toast("Launcher written: " + (result.payload?.script?.file || "runs/"));
       } catch (error) {
         toast(error.message || String(error));

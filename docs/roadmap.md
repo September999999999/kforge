@@ -98,6 +98,7 @@ Goal: make the protocol usable from common AI and PKM environments.
 - Web dashboard controls to plan multi-agent runs from one review queue
 - provider-neutral parallel agent launch scripts, including CLI, JSON, and MCP
   surfaces
+- Web dashboard launcher flow that can reuse the exact planned agent batch
 - multi-agent board state with active runs, claimed tasks, and coordination gap
   detection
 - explicit multi-agent reconcile command for recoverable coordination drift

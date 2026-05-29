@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   agentBoard,
   agentLaunch,
+  agentReconcile,
   bootstrapRepo,
   dashboardRepo,
   doctorRepo,
@@ -200,6 +201,23 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
       const command = optionalString(body.command);
       const noPlan = Boolean(body.noPlan);
       const result = agentLaunch(repoPath, { agents, command, noPlan, write: true, json: true });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/agent-reconcile-preview") {
+      const result = agentReconcile(repoPath, { json: true });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/agent-reconcile") {
+      const body = await readJsonBody(request);
+      const result = agentReconcile(repoPath, {
+        write: true,
+        note: optionalString(body.note) ?? "Reconciled from kforge web dashboard.",
+        json: true,
+      });
       sendJson(response, result.ok ? 200 : 400, commandResponse(result));
       return;
     }
@@ -840,6 +858,7 @@ function webDashboardHtml(): string {
           <section id="agents">
             <div class="section-head"><h2>Agents</h2><span class="subtle" id="agentSummary"></span></div>
             <div class="section-body" id="agentTable"></div>
+            <div class="section-body" id="agentReconcilePanel"></div>
           </section>
           <section>
             <div class="section-head"><h2>Bootstrap</h2></div>
@@ -1123,14 +1142,71 @@ function webDashboardHtml(): string {
 
     function renderAgents(agents) {
       const items = agents?.agents || [];
-      $("agentSummary").textContent = (agents?.counts?.agents ?? 0) + " active";
+      const gaps = (agents?.counts?.orphanClaimedTasks ?? 0) + (agents?.counts?.runsWithoutClaimedTask ?? 0);
+      $("agentSummary").textContent = (agents?.counts?.agents ?? 0) + " active" + (gaps ? " · " + gaps + " gaps" : "");
       if (!items.length) {
         $("agentTable").innerHTML = '<div class="empty">No active agents.</div>';
+      } else {
+        $("agentTable").innerHTML = '<table><thead><tr><th>Agent</th><th>Runs</th><th>Tasks</th></tr></thead><tbody>' +
+          items.map((item) => '<tr><td>' + h(item.agent) + '</td><td>' + h((item.runningRuns || []).length) + '</td><td>' + h((item.claimedTasks || []).length) + '</td></tr>').join("") +
+          '</tbody></table>';
+      }
+
+      if (!gaps) {
+        $("agentReconcilePanel").innerHTML = '<div class="empty">No recoverable coordination drift.</div>';
         return;
       }
-      $("agentTable").innerHTML = '<table><thead><tr><th>Agent</th><th>Runs</th><th>Tasks</th></tr></thead><tbody>' +
-        items.map((item) => '<tr><td>' + h(item.agent) + '</td><td>' + h((item.runningRuns || []).length) + '</td><td>' + h((item.claimedTasks || []).length) + '</td></tr>').join("") +
-        '</tbody></table>';
+      $("agentReconcilePanel").innerHTML =
+        '<div class="viewer-actions">' +
+        '<button class="button small" id="reconcilePreviewButton" type="button">Preview Reconcile</button>' +
+        '<button class="button small primary" id="reconcileApplyButton" type="button">Apply Reconcile</button>' +
+        '</div>' +
+        '<div class="preview-output" id="reconcilePreview"></div>';
+      $("reconcilePreviewButton").addEventListener("click", previewReconcile);
+      $("reconcileApplyButton").addEventListener("click", applyReconcile);
+    }
+
+    function renderReconcilePreview(payload, label) {
+      const actions = payload?.actions || [];
+      const rows = actions.length
+        ? '<table><thead><tr><th>Action</th><th>Task</th><th>Run</th><th>Agent</th><th>Applied</th></tr></thead><tbody>' +
+          actions.map((action) => '<tr><td>' + h(action.action) + '</td><td><code>' + h(action.task || "-") + '</code></td><td><code>' + h(action.run || "-") + '</code></td><td>' + h(action.agent || "-") + '</td><td>' + h(action.applied ? "yes" : "no") + '</td></tr>').join("") +
+          '</tbody></table>'
+        : '<div class="empty">No reconcile actions.</div>';
+      const target = $("reconcilePreview");
+      if (target) {
+        target.innerHTML = '<div class="viewer-meta"><span class="status ok">' + h(label) + '</span><span>' + h(payload?.counts?.actions ?? 0) + ' actions</span></div>' + rows;
+      }
+    }
+
+    async function previewReconcile() {
+      setBusy(true);
+      try {
+        const result = await api("/api/agent-reconcile-preview", { method: "POST", body: "{}" });
+        renderReconcilePreview(result.payload || {}, "dry run");
+        toast("Reconcile preview ready");
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function applyReconcile() {
+      setBusy(true);
+      try {
+        const result = await api("/api/agent-reconcile", {
+          method: "POST",
+          body: JSON.stringify({ note: "Reconciled from kforge web dashboard." }),
+        });
+        await load();
+        renderReconcilePreview(result.payload || {}, "applied");
+        toast("Reconciled " + (result.payload?.counts?.applied ?? 0) + " action(s)");
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
     }
 
     function badge(status) {

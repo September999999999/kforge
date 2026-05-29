@@ -435,7 +435,50 @@ test("web dashboard serves repo state and safe actions", async () => {
           agents: ["web-a"],
           command: "printf {agent}:{run}",
         }),
-      })) as { ok?: boolean; payload?: { script?: { file?: string }; items?: unknown[] } };
+      })) as {
+        ok?: boolean;
+        payload?: {
+          script?: { file?: string };
+          items?: Array<{ task?: { file?: string }; run?: { file?: string; agent?: string } }>;
+        };
+      };
+      const launchedTaskFile = launch.payload?.items?.[0]?.task?.file ?? "";
+      const launchedRunFile = launch.payload?.items?.[0]?.run?.file ?? "";
+      const launchedTaskPath = path.join(repoPath, launchedTaskFile);
+      await writeFile(
+        launchedTaskPath,
+        (await readFile(launchedTaskPath, "utf8"))
+          .replace("Status: claimed", "Status: open")
+          .replace("Owner: web-a", "Owner: -")
+          .replace(`Claimed: ${today()}`, "Claimed: -"),
+        "utf8",
+      );
+      const reconcilePreview = (await fetchJson(`${handle.url}/api/agent-reconcile-preview`, {
+        method: "POST",
+        body: "{}",
+      })) as {
+        ok?: boolean;
+        payload?: {
+          dryRun?: boolean;
+          counts?: { actions?: number; applied?: number };
+          actions?: Array<{ action?: string; task?: string; run?: string; agent?: string; applied?: boolean }>;
+        };
+      };
+      const stateAfterReconcilePreview = (await fetchJson(`${handle.url}/api/state`)) as {
+        ok?: boolean;
+        agents?: { counts?: { runsWithoutClaimedTask?: number } };
+      };
+      const reconcileApply = (await fetchJson(`${handle.url}/api/agent-reconcile`, {
+        method: "POST",
+        body: JSON.stringify({ note: "web reconcile" }),
+      })) as {
+        ok?: boolean;
+        payload?: {
+          dryRun?: boolean;
+          counts?: { actions?: number; applied?: number };
+          board?: { counts?: { runsWithoutClaimedTask?: number } };
+        };
+      };
 
       assert.match(html, /Knowledge Repo Dashboard/);
       assert.match(html, /File Preview/);
@@ -484,6 +527,20 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(launch.payload?.items?.length, 1);
       assert.match(launch.payload?.script?.file ?? "", /^runs\/.+agent-launch.*\.sh$/);
       assert.match(await readFile(path.join(repoPath, launch.payload?.script?.file ?? ""), "utf8"), /printf web-a:runs\//);
+      assert.match(launchedTaskFile, /^tasks\/.+\.md$/);
+      assert.match(launchedRunFile, /^runs\/.+\.md$/);
+      assert.equal(reconcilePreview.ok, true);
+      assert.equal(reconcilePreview.payload?.dryRun, true);
+      assert.equal(reconcilePreview.payload?.counts?.applied, 0);
+      assert.equal(reconcilePreview.payload?.actions?.some((action) => action.action === "claim_run_task" && action.task === launchedTaskFile), true);
+      assert.equal(reconcilePreview.payload?.actions?.some((action) => action.run === launchedRunFile && action.applied === false), true);
+      assert.equal(stateAfterReconcilePreview.agents?.counts?.runsWithoutClaimedTask, 1);
+      assert.equal(reconcileApply.ok, true);
+      assert.equal(reconcileApply.payload?.dryRun, false);
+      assert.equal(reconcileApply.payload?.counts?.applied, 1);
+      assert.equal(reconcileApply.payload?.board?.counts?.runsWithoutClaimedTask, 0);
+      assert.match(await readFile(launchedTaskPath, "utf8"), /Status: claimed/);
+      assert.match(await readFile(launchedTaskPath, "utf8"), /Owner: web-a/);
 
       const outside = await fetch(`${handle.url}/api/file?path=${encodeURIComponent("../outside.md")}`);
       assert.equal(outside.status, 400);

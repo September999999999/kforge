@@ -153,6 +153,7 @@ tools that do not require an LLM provider:
 - generate a parallel agent launch script, or execute it when a worker command
   template is configured
 - inspect multi-agent board state and coordination gaps
+- preview and repair recoverable agent coordination drift from CLI, MCP, or Web
 - run a localhost web dashboard for repo status, review queues, task queues,
   running agents, and safe workflow actions
 - run structural health checks for links and local source references
@@ -481,7 +482,8 @@ The web dashboard binds to `127.0.0.1` by default. It shows repo health, file
 navigation, review queue, task queue, runs, active agents, safe review file
 previews, and low-risk workflow actions such as saving Proposed Content,
 accepting or rejecting reviews, previewing review apply as a dry run, explicitly
-applying accepted reviews, refresh, bootstrap, and writing an agent launcher.
+applying accepted reviews, previewing or applying recoverable agent reconcile,
+refresh, bootstrap, and writing an agent launcher.
 
 Search the repo:
 

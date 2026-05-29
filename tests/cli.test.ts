@@ -81,6 +81,7 @@ test("cli can run the documented demo workflow", async () => {
     const reviewNextJson = await runCli(["review", "next", repoPath, "--json"]);
     const claimAudit = await runCli(["claim", "audit", repoPath, "--json"]);
     const claimReviewDrift = await runCli(["claim", "review-drift", repoPath, "--dry-run"]);
+    const claimReviewDriftJson = await runCli(["claim", "review-drift", repoPath, "--dry-run", "--json"]);
     const doctor = await runCli(["doctor", repoPath, "--write"]);
 
     assert.equal(init.exitCode, 0);
@@ -123,6 +124,8 @@ test("cli can run the documented demo workflow", async () => {
     assert.equal(JSON.parse(claimAudit.stdout).counts.claims, 1);
     assert.equal(claimReviewDrift.exitCode, 0);
     assert.match(claimReviewDrift.stdout, /No source drift warnings found|Would create .* stale review/);
+    assert.equal(claimReviewDriftJson.exitCode, 0);
+    assert.equal(JSON.parse(claimReviewDriftJson.stdout).dryRun, true);
     assert.equal(doctor.exitCode, 0);
     assert.match(doctor.stdout, /indexes\/doctor.md/);
     assert.match(await readFile(path.join(repoPath, "indexes", "doctor.md"), "utf8"), /Status: clean/);

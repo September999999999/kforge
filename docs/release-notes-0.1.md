@@ -80,7 +80,7 @@ Use this release if you want:
 - `kforge score` summarizes provenance, review debt, target coverage, and
   doctor health.
 - `kforge claim audit` and `claim review-drift` surface source drift and review
-  debt.
+  debt, with JSON output for stale-review automation.
 - Review quality gates block acceptance, apply, and accepted output promotion
   when draft TODO markers remain.
 

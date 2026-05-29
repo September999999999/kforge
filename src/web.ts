@@ -24,7 +24,9 @@ import {
   releaseTask,
   refreshRepo,
   applyReview,
+  auditClaims,
   completeTask,
+  reviewClaimDrift,
   reviewQueue,
   searchRepo,
   taskList,
@@ -404,6 +406,18 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
       return;
     }
 
+    if (request.method === "POST" && url.pathname === "/api/claim-review-drift-preview") {
+      const result = reviewClaimDrift(repoPath, { dryRun: true, json: true });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/claim-review-drift") {
+      const result = reviewClaimDrift(repoPath, { json: true });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
     if (request.method === "POST" && url.pathname === "/api/run-log") {
       const body = await readJsonBody(request);
       const run = optionalString(body.run);
@@ -469,6 +483,7 @@ function webDashboardState(repoPath: string): Record<string, unknown> {
     updatedAt: new Date().toISOString(),
     dashboard: parseJsonResult(dashboardRepo(repoPath, { json: true })),
     doctor: parseJsonResult(doctorRepo(repoPath, { json: true })),
+    claimAudit: parseJsonResult(auditClaims(repoPath, { json: true })),
     reviews: parseJsonResult(reviewQueue(repoPath, { status: "all", limit: 25, json: true })),
     tasks: parseJsonResult(taskList(repoPath, { status: "all", json: true })),
     runs: parseJsonResult(listRuns(repoPath, { status: "all", json: true })),
@@ -1286,6 +1301,8 @@ function webDashboardHtml(): string {
       const doctorOk = data.doctor?.ok === true;
       const health = data.dashboard?.health || {};
       const messages = data.doctor?.messages || [];
+      const claimAudit = data.claimAudit || {};
+      const sourceDrift = Number(claimAudit?.counts?.sourceDrift || 0);
       $("healthStatus").className = "status " + (doctorOk ? "ok" : "bad");
       $("healthStatus").textContent = doctorOk ? (messages.length ? "clean with notes" : "clean") : "needs review";
       const next = data.dashboard?.next || [];
@@ -1301,6 +1318,9 @@ function webDashboardHtml(): string {
       const nextRows = next.length
         ? next.map((command) => '<li><code>' + h(command) + '</code></li>').join("")
         : '<li><code>kforge workflow .</code></li>';
+      const driftActions = sourceDrift > 0
+        ? '<div class="viewer-actions"><button class="button small" type="button" id="claimDriftPreviewButton">Preview Drift Reviews</button><button class="button small primary" type="button" id="claimDriftCreateButton">Create Drift Reviews</button></div><div class="preview-output" id="claimDriftResult"></div>'
+        : '<div class="empty">No claim source drift warnings.</div><div class="preview-output" id="claimDriftResult"></div>';
       $("healthPanel").innerHTML =
         '<div class="metrics">' +
         summary.map(([label, value]) => '<div class="metric"><strong>' + h(value) + '</strong><span>' + h(label) + '</span></div>').join("") +
@@ -1308,7 +1328,53 @@ function webDashboardHtml(): string {
         '<div class="viewer-grid">' +
         '<div><h3>Doctor Checks</h3><ul>' + issueRows + '</ul></div>' +
         '<div><h3>Next Actions</h3><ul>' + nextRows + '</ul></div>' +
-        '</div>';
+        '</div>' +
+        '<div><h3>Claim Drift</h3>' + driftActions + '</div>';
+      const previewButton = $("claimDriftPreviewButton");
+      if (previewButton) previewButton.addEventListener("click", previewClaimDriftReviews);
+      const createButton = $("claimDriftCreateButton");
+      if (createButton) createButton.addEventListener("click", createClaimDriftReviews);
+    }
+
+    function renderClaimDriftResult(payload, label) {
+      const target = $("claimDriftResult");
+      if (!target) return;
+      const items = payload?.items || [];
+      const counts = payload?.counts || {};
+      const rows = items.length
+        ? '<table><thead><tr><th>Action</th><th>Claim</th><th>Source</th><th>Review</th></tr></thead><tbody>' +
+          items.map((item) => '<tr><td>' + h(item.action) + '</td><td><code>' + h(item.claim) + '</code></td><td><code>' + h(item.source) + '</code></td><td>' + (item.review ? '<button class="button small" type="button" data-open-file="' + h(item.review) + '">' + h(item.review) + '</button>' : '-') + '</td></tr>').join("") +
+          '</tbody></table>'
+        : '<div class="empty">No claim source drift warnings.</div>';
+      target.innerHTML = '<div class="viewer-meta"><span class="status ok">' + h(label) + '</span><span>' + h(counts.created || 0) + ' created</span><span>' + h(counts.wouldCreate || 0) + ' would create</span><span>' + h(counts.skipped || 0) + ' skipped</span></div>' + rows;
+      bindFileOpenButtons();
+    }
+
+    async function previewClaimDriftReviews() {
+      setBusy(true);
+      try {
+        const result = await api("/api/claim-review-drift-preview", { method: "POST", body: "{}" });
+        renderClaimDriftResult(result.payload || {}, "dry run");
+        toast("Previewed claim drift reviews");
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function createClaimDriftReviews() {
+      setBusy(true);
+      try {
+        const result = await api("/api/claim-review-drift", { method: "POST", body: "{}" });
+        await load();
+        renderClaimDriftResult(result.payload || {}, "created");
+        toast("Created claim drift reviews");
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
     }
 
     function renderFiles(files) {

@@ -377,7 +377,8 @@ if an open stale review already targets the same claim and source, it is skipped
 instead of duplicated. The generated review includes agent handoff steps,
 suggested inspect/audit commands, and a fenced `## Proposed Content` claim
 draft that must be checked before apply. Use `--dry-run` to preview the reviews
-it would create.
+it would create. Add `--json` for created/skipped counts and review refs that
+agents, CI jobs, or the Web dashboard can file into the next workflow step.
 
 ## Review File Shape
 

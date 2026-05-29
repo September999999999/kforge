@@ -99,7 +99,8 @@ accepts a `path` argument when an agent needs to operate on a different repo.
   `json` for the created review ref, source refs, status, and next commands
 - `kforge_claim_new`: create a sourced claim artifact
 - `kforge_claim_audit`: audit claim provenance, status, confidence, and review debt
-- `kforge_claim_review_drift`: create stale review artifacts for source drift warnings
+- `kforge_claim_review_drift`: create stale review artifacts for source drift
+  warnings; set `json` for created/skipped counts and review refs
 - `kforge_review_new`: create a review artifact
 - `kforge_review_queue`: list prioritized actionable review work; set `json`
   for structured `items`, `next`, blockers, and suggested commands

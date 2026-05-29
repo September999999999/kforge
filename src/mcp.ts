@@ -912,10 +912,11 @@ export function createKforgeMcpServer(options: McpOptions = {}): McpServer {
       inputSchema: z.object({
         path: repoPathSchema,
         dryRun: z.boolean().optional(),
+        json: z.boolean().optional(),
       }),
     },
-    async ({ path: repoPath, dryRun }) =>
-      runAsTool(() => reviewClaimDrift(toolRepoPath(defaultRepoPath, repoPath), { dryRun })),
+    async ({ path: repoPath, dryRun, json }) =>
+      runAsTool(() => reviewClaimDrift(toolRepoPath(defaultRepoPath, repoPath), { dryRun, json })),
   );
 
   server.registerTool(

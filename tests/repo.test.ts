@@ -94,6 +94,7 @@ import {
   type RunNextPayload,
   type RunStartPayload,
   type SearchPayload,
+  type ClaimReviewDriftPayload,
   type SourceImportPayload,
   type SourceFetchListPayload,
   type SourceFetchPayload,
@@ -381,6 +382,16 @@ test("web dashboard serves repo state and safe actions", async () => {
     await mkdir(path.join(importDir, "nested"), { recursive: true });
     await writeFile(path.join(importDir, "nested", "Data.csv"), "a,b\n1,2\n", "utf8");
     await writeFile(path.join(repoPath, "raw", "source.md"), "# Source\n", "utf8");
+    await writeFile(
+      path.join(repoPath, "claims", "web-stale.md"),
+      "# Claim: Web Stale\n\nStatus: reviewed\nConfidence: medium\nCreated: 2026-01-01\n\n## Assertion\n\nOld web claim.\n\n## Sources\n\n- `raw/source.md`\n",
+      "utf8",
+    );
+    await utimes(
+      path.join(repoPath, "raw", "source.md"),
+      new Date("2026-02-01T00:00:00Z"),
+      new Date("2026-02-01T00:00:00Z"),
+    );
     await mkdir(path.join(repoPath, "raw", "_meta"), { recursive: true });
     await writeFile(path.join(repoPath, "raw", "_meta", "source.md"), "# Source Metadata\n", "utf8");
     await writeFile(path.join(repoPath, "wiki", "Existing.md"), "# Existing\n", "utf8");
@@ -419,7 +430,8 @@ test("web dashboard serves repo state and safe actions", async () => {
           next?: string[];
         };
         doctor?: { ok?: boolean; status?: string; messages?: string[] };
-        reviews?: { total?: number; items?: { file?: string }[] };
+        claimAudit?: { counts?: { sourceDrift?: number } };
+        reviews?: { total?: number; items?: { file?: string; kind?: string }[] };
         tasks?: { total?: number };
       };
       const reviewFile = state.reviews?.items?.[0]?.file ?? "";
@@ -429,6 +441,14 @@ test("web dashboard serves repo state and safe actions", async () => {
         file?: string;
         inspect?: string;
         content?: string;
+      };
+      const driftPreview = (await fetchJson(`${handle.url}/api/claim-review-drift-preview`, {
+        method: "POST",
+        body: "{}",
+      })) as { ok?: boolean; payload?: ClaimReviewDriftPayload };
+      const stateAfterDriftPreview = (await fetchJson(`${handle.url}/api/state`)) as {
+        ok?: boolean;
+        claimAudit?: { counts?: { sourceDrift?: number } };
       };
       const search = (await fetchJson(`${handle.url}/api/search`, {
         method: "POST",
@@ -706,6 +726,8 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.match(html, /Files/);
       assert.match(html, /sourceFetchListForm/);
       assert.match(html, /sourceImportForm/);
+      assert.match(html, /claimDriftPreviewButton/);
+      assert.match(html, /\/api\/claim-review-drift/);
       assert.match(html, /data-open-file/);
       assert.match(html, /launchResult/);
       assert.equal(files.ok, true);
@@ -719,6 +741,7 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(state.dashboard?.health?.doctor, "clean");
       assert.equal(typeof state.dashboard?.health?.trustScore, "number");
       assert.equal(state.dashboard?.health?.claimAudit, "clean");
+      assert.equal(state.claimAudit?.counts?.sourceDrift, 1);
       assert.equal(state.dashboard?.health?.agentGaps, 0);
       assert.equal(state.doctor?.ok, true);
       assert.equal(state.doctor?.status, "clean");
@@ -730,6 +753,12 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(filePreview.file, reviewFile);
       assert.match(filePreview.inspect ?? "", /# File Inspect/);
       assert.match(filePreview.content ?? "", /# Review: Web Review/);
+      assert.equal(driftPreview.ok, true);
+      assert.equal(driftPreview.payload?.dryRun, true);
+      assert.equal(driftPreview.payload?.counts.wouldCreate, 1);
+      assert.equal(driftPreview.payload?.items[0]?.action, "would_create");
+      assert.equal(driftPreview.payload?.items[0]?.claim, "claims/web-stale.md");
+      assert.equal(stateAfterDriftPreview.claimAudit?.counts?.sourceDrift, 1);
       assert.equal(search.ok, true);
       assert.equal(search.payload?.query, "compiled");
       assert.deepEqual(search.payload?.scopes, ["reviews"]);
@@ -892,6 +921,48 @@ test("web dashboard serves repo state and safe actions", async () => {
     await sourceServer.close();
     await rm(repoPath, { recursive: true, force: true });
     await rm(importDir, { recursive: true, force: true });
+  }
+});
+
+test("web dashboard creates claim drift reviews from health actions", async () => {
+  const repoPath = await tempRepoPath();
+  try {
+    initRepo(repoPath);
+    const sourcePath = path.join(repoPath, "raw", "source.md");
+    await writeFile(sourcePath, "# Source\n", "utf8");
+    await writeFile(
+      path.join(repoPath, "claims", "web-stale.md"),
+      "# Claim: Web Stale\n\nStatus: reviewed\nConfidence: medium\nCreated: 2026-01-01\n\n## Assertion\n\nOld web claim.\n\n## Sources\n\n- `raw/source.md`\n",
+      "utf8",
+    );
+    await utimes(sourcePath, new Date("2026-02-01T00:00:00Z"), new Date("2026-02-01T00:00:00Z"));
+
+    const handle = await serveWebDashboard(repoPath, { port: 0 });
+    try {
+      const created = (await fetchJson(`${handle.url}/api/claim-review-drift`, {
+        method: "POST",
+        body: "{}",
+      })) as { ok?: boolean; payload?: ClaimReviewDriftPayload };
+      const stateAfterCreate = (await fetchJson(`${handle.url}/api/state`)) as {
+        ok?: boolean;
+        reviews?: { total?: number; items?: { file?: string; kind?: string }[] };
+      };
+
+      assert.equal(created.ok, true);
+      assert.equal(created.payload?.dryRun, false);
+      assert.equal(created.payload?.counts.created, 1);
+      assert.match(created.payload?.items[0]?.review ?? "", /^reviews\/.+review-stale-claim-web-stale\.md$/);
+      assert.equal(stateAfterCreate.reviews?.total, 1);
+      assert.equal(stateAfterCreate.reviews?.items?.some((item) => item.kind === "stale"), true);
+      assert.match(
+        await readFile(path.join(repoPath, created.payload?.items[0]?.review ?? ""), "utf8"),
+        /Review trigger: `raw\/source.md` was modified on 2026-02-01/,
+      );
+    } finally {
+      await handle.close();
+    }
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
   }
 });
 
@@ -1445,13 +1516,18 @@ test("reviewClaimDrift creates stale review artifacts and skips duplicates", asy
     await utimes(sourcePath, new Date("2026-02-01T00:00:00Z"), new Date("2026-02-01T00:00:00Z"));
 
     const dryRun = reviewClaimDrift(repoPath, { dryRun: true });
+    const dryRunJson = JSON.parse(reviewClaimDrift(repoPath, { dryRun: true, json: true }).messages[0]) as ClaimReviewDriftPayload;
     const created = reviewClaimDrift(repoPath);
+    const duplicateJson = JSON.parse(reviewClaimDrift(repoPath, { json: true }).messages[0]) as ClaimReviewDriftPayload;
     const duplicate = reviewClaimDrift(repoPath);
     const reviewFile = path.join(repoPath, "reviews", `${today()}-review-stale-claim-stale.md`);
     const reviewText = await readFile(reviewFile, "utf8");
 
     assert.equal(dryRun.ok, true);
     assert.match(dryRun.messages.join("\n"), /Would create stale review/);
+    assert.equal(dryRunJson.dryRun, true);
+    assert.equal(dryRunJson.counts.wouldCreate, 1);
+    assert.equal(dryRunJson.items[0]?.action, "would_create");
     assert.equal(created.ok, true);
     assert.match(created.messages.join("\n"), /Created stale review for claims\/stale.md -> raw\/source.md/);
     assert.match(reviewText, /Kind: stale/);
@@ -1464,6 +1540,9 @@ test("reviewClaimDrift creates stale review artifacts and skips duplicates", asy
     assert.match(reviewText, /Decision checklist/);
     assert.match(reviewText, /Expected outcome/);
     assert.match(reviewText, /Do not treat source drift as proof/);
+    assert.equal(duplicateJson.counts.skipped, 1);
+    assert.equal(duplicateJson.items[0]?.action, "skipped_existing");
+    assert.equal(duplicateJson.items[0]?.review, `reviews/${today()}-review-stale-claim-stale.md`);
     assert.equal(duplicate.ok, true);
     assert.match(duplicate.messages.join("\n"), /Skipped existing open stale review/);
   } finally {

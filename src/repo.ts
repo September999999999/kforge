@@ -325,6 +325,32 @@ export interface ClaimAuditOptions {
 
 export interface ReviewClaimDriftOptions {
   dryRun?: boolean;
+  json?: boolean;
+}
+
+export type ClaimReviewDriftAction = "would_create" | "created" | "skipped_existing";
+
+export interface ClaimReviewDriftItem {
+  claim: string;
+  source: string;
+  sourceModified: string;
+  claimCreated: string;
+  action: ClaimReviewDriftAction;
+  review?: string;
+}
+
+export interface ClaimReviewDriftPayload {
+  ok: true;
+  updatedAt: string;
+  dryRun: boolean;
+  counts: {
+    drift: number;
+    wouldCreate: number;
+    created: number;
+    skipped: number;
+  };
+  items: ClaimReviewDriftItem[];
+  next: string[];
 }
 
 export interface ReviewQueueOptions {
@@ -1969,16 +1995,34 @@ export function reviewClaimDrift(repoPath: string, options: ReviewClaimDriftOpti
   const driftItems = audit.claims.flatMap((claim) =>
     claim.sourceDrift.map((drift) => ({ claim, drift })),
   );
+  const payload: ClaimReviewDriftPayload = {
+    ok: true,
+    updatedAt: today(),
+    dryRun: Boolean(options.dryRun),
+    counts: {
+      drift: driftItems.length,
+      wouldCreate: 0,
+      created: 0,
+      skipped: 0,
+    },
+    items: [],
+    next: [],
+  };
+
   if (driftItems.length === 0) {
+    payload.next = ["kforge claim audit . --write", "kforge doctor ."];
+    if (options.json) {
+      return { ok: true, messages: [JSON.stringify(payload, null, 2)] };
+    }
     return { ok: true, messages: ["No source drift warnings found."] };
   }
 
   const messages: string[] = [];
-  let created = 0;
-  let skipped = 0;
   for (const { claim, drift } of driftItems) {
-    if (openStaleReviewExists(repoPath, claim.file, drift.source)) {
-      skipped += 1;
+    const existingReview = openStaleReviewRef(repoPath, claim.file, drift.source);
+    if (existingReview) {
+      payload.counts.skipped += 1;
+      payload.items.push(claimReviewDriftItem(claim, drift, "skipped_existing", existingReview));
       messages.push(`Skipped existing open stale review for ${claim.file} -> ${drift.source}`);
       continue;
     }
@@ -1990,6 +2034,8 @@ export function reviewClaimDrift(repoPath: string, options: ReviewClaimDriftOpti
     const risks = staleClaimReviewRisks(claim, drift);
 
     if (options.dryRun) {
+      payload.counts.wouldCreate += 1;
+      payload.items.push(claimReviewDriftItem(claim, drift, "would_create"));
       messages.push(`Would create stale review for ${claim.file} -> ${drift.source}`);
       continue;
     }
@@ -2008,13 +2054,21 @@ export function reviewClaimDrift(repoPath: string, options: ReviewClaimDriftOpti
       return result;
     }
 
-    created += 1;
+    const review = result.messages[0]?.match(/^Created\s+(.+)$/)?.[1];
+    payload.counts.created += 1;
+    payload.items.push(claimReviewDriftItem(claim, drift, "created", review));
     messages.push(...result.messages);
     messages.push(`Created stale review for ${claim.file} -> ${drift.source}`);
   }
 
   const action = options.dryRun ? "Would create" : "Created";
-  messages.push(`${action} ${options.dryRun ? driftItems.length - skipped : created} stale review artifact(s); skipped ${skipped} existing open review(s).`);
+  messages.push(`${action} ${options.dryRun ? payload.counts.wouldCreate : payload.counts.created} stale review artifact(s); skipped ${payload.counts.skipped} existing open review(s).`);
+  payload.next = options.dryRun
+    ? ["kforge claim review-drift . --json", "kforge review queue . --status all --json"]
+    : ["kforge review queue . --status all --json", "kforge claim audit . --write"];
+  if (options.json) {
+    return { ok: true, messages: [JSON.stringify(payload, null, 2)] };
+  }
   return { ok: true, messages };
 }
 
@@ -7689,9 +7743,9 @@ function claimSourceDriftRefs(repoPath: string, claimCreated: string, sources: s
   return drift;
 }
 
-function openStaleReviewExists(repoPath: string, claimFile: string, sourceFile: string): boolean {
+function openStaleReviewRef(repoPath: string, claimFile: string, sourceFile: string): string | undefined {
   const reviewFiles = iterFiles(path.join(repoPath, "reviews"));
-  return reviewFiles.some((file) => {
+  const match = reviewFiles.find((file) => {
     const text = readText(file);
     const status = documentField(text, "Status") ?? "unknown";
     const kind = documentField(text, "Kind") ?? "unknown";
@@ -7702,6 +7756,23 @@ function openStaleReviewExists(repoPath: string, claimFile: string, sourceFile: 
       sourceRefs(text).some((source) => sameRepoRef(source, sourceFile))
     );
   });
+  return match ? toRepoPath(repoPath, match) : undefined;
+}
+
+function claimReviewDriftItem(
+  claim: ClaimAuditData["claims"][number],
+  drift: ClaimSourceDrift,
+  action: ClaimReviewDriftAction,
+  review?: string,
+): ClaimReviewDriftItem {
+  return {
+    claim: claim.file,
+    source: drift.source,
+    sourceModified: drift.sourceModified,
+    claimCreated: drift.claimCreated,
+    action,
+    ...(review ? { review } : {}),
+  };
 }
 
 function openCompileReviewExists(repoPath: string, targetFile: string, sourceFile: string): boolean {

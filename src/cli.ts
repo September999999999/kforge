@@ -884,12 +884,13 @@ function runClaimCommand(args: string[]): CommandResult {
     const parsed = parseArgs(rest);
     const repoPath = resolveRepoPath(parsed.positionals[0] ?? ".");
     const dryRun = flagOption(parsed.options, "dry-run");
-    return reviewClaimDrift(repoPath, { dryRun });
+    const json = flagOption(parsed.options, "json");
+    return reviewClaimDrift(repoPath, { dryRun, json });
   }
 
   if (subcommand !== "new") {
     throw new Error(
-      "Usage: kforge claim new [path] --title <title> --source <raw/file.md>\n       kforge claim audit [path] [--write] [--json]\n       kforge claim review-drift [path] [--dry-run]",
+      "Usage: kforge claim new [path] --title <title> --source <raw/file.md>\n       kforge claim audit [path] [--write] [--json]\n       kforge claim review-drift [path] [--dry-run] [--json]",
     );
   }
 
@@ -1200,7 +1201,8 @@ Usage:
   kforge claim new [path] --title <title> --source <path>
                                                        create a sourced claim
   kforge claim audit [path] [--write] [--json]          audit claim provenance and review debt
-  kforge claim review-drift [path] [--dry-run]          create reviews for source drift warnings
+  kforge claim review-drift [path] [--dry-run] [--json]
+                                                       create reviews for source drift warnings
   kforge review queue [path] [--limit <n>] [--status <actionable|open|accepted|all>] [--json]
                                                        list prioritized review work
   kforge review next [path] [--json]                    show the next actionable review

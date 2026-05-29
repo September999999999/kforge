@@ -703,7 +703,7 @@ kforge claim new [path] --title <title> --source <path>
                          create a sourced claim file
 kforge claim audit [path] [--write] [--json]
                          audit claim provenance and review debt
-kforge claim review-drift [path] [--dry-run]
+kforge claim review-drift [path] [--dry-run] [--json]
                          create reviews for source drift warnings
 kforge review queue [path] [--limit <n>] [--status <actionable|open|accepted|all>] [--json]
                          list prioritized review work

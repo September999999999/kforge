@@ -890,9 +890,10 @@ test("mcp server exposes kforge tools over stdio", async () => {
       name: "kforge_claim_review_drift",
       arguments: {
         dryRun: true,
+        json: true,
       },
     });
-    assert.match(firstText(claimReviewDrift.content), /No source drift warnings found|Would create .* stale review/);
+    assert.equal(JSON.parse(firstText(claimReviewDrift.content)).dryRun, true);
 
     const status = await client.callTool({
       name: "kforge_review_status",

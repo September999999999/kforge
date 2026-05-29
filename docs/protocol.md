@@ -266,10 +266,11 @@ through the same inspect path checks as the CLI. Its write actions intentionally
 stay narrow: save structured Proposed Content, accept or reject review artifacts,
 preview review apply as a dry run, explicitly apply accepted review content,
 create compile-review draft outputs and attach them back to reviews, fetch URL
-sources, pasted URL lists, or local directories into `raw/`, refresh derived
-indexes, bootstrap review-first work, write an agent launcher script, and append
-or finish running agent runs as success or failure, optionally marking linked
-tasks done on success or releasing claimed tasks back to the queue.
+sources, pasted URL lists, or local directories into `raw/`, run Trust CI
+gates, refresh derived indexes, bootstrap review-first work, write an agent
+launcher script, and append or finish running agent runs as success or failure,
+optionally marking linked tasks done on success or releasing claimed tasks back
+to the queue.
 It can also plan multi-agent runs from the same review queue before a launcher
 is generated, or dispatch a fresh research queue into multi-agent runs and a
 launcher in one Web action. The apply path uses the same accepted-review checks

@@ -111,7 +111,7 @@ shell scripts can all understand.
   parallel from those planned runs
 - inspect a shared agent board for active runs, claimed tasks, and gaps
 - record auditable agent runs with logs and success/failure status
-- run deterministic health checks and trust score reports
+- run deterministic health checks, trust score reports, and Trust CI gates
 - audit claim provenance, status, confidence, source drift, and review debt
 - expose the same operations to agents through a stdio MCP server
 
@@ -144,7 +144,7 @@ tools that do not require an LLM provider:
   and optional multi-agent run assignments
 - generate source-to-wiki compile briefs for LLM handoff
 - generate provider-neutral answer packs for questions
-- print or write trust score reports
+- print or write trust score reports and run Trust CI gates
 - search local text files without a vector database
 - inspect one file before reading it in full
 - generate agent task packs for LLM handoff
@@ -509,8 +509,9 @@ doctor checks, trust score, claim audit, and next actions, plus file navigation,
 review queue, task queue, runs, active agents, safe review file previews, and
 low-risk workflow actions such as saving Proposed Content, accepting or
 rejecting reviews, previewing review apply as a dry run, explicitly applying
-accepted reviews, previewing or applying recoverable agent reconcile, single-URL,
-pasted URL-list, and local-directory source ingest, local search with
+accepted reviews, previewing or applying recoverable agent reconcile, running
+Trust CI gates, single-URL, pasted URL-list, and local-directory source ingest,
+local search with
 open-in-preview results, writing answer packs into outputs, drafting and
 attaching compile-review outputs, refresh, bootstrap, planning multi-agent runs,
 writing an agent launcher, dispatching fresh research queues to multiple

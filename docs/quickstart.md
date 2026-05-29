@@ -71,8 +71,9 @@ doctor checks, trust score, claim audit, and next actions, plus file navigation,
 review queue, task queue, runs, active agents, safe review file previews, and
 safe actions for saving Proposed Content, accepting or rejecting reviews,
 previewing review apply as a dry run, explicitly applying accepted reviews,
-previewing or applying recoverable agent reconcile, previewing or creating stale
-claim-drift reviews, refresh, bootstrap, single-URL, pasted URL-list, and
+previewing or applying recoverable agent reconcile, running Trust CI gates,
+previewing or creating stale claim-drift reviews, refresh, bootstrap,
+single-URL, pasted URL-list, and
 local-directory source ingest, local search with
 open-in-preview results, answer-pack writing, compile-review draft-and-attach,
 output promotion into reviews, planning multi-agent runs, writing agent launch

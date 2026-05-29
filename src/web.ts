@@ -9,6 +9,7 @@ import {
   agentReconcile,
   askRepo,
   bootstrapRepo,
+  ciRepo,
   compileDraftRepo,
   dashboardRepo,
   doctorRepo,
@@ -284,6 +285,17 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
     if (request.method === "POST" && url.pathname === "/api/refresh") {
       const result = refreshRepo(repoPath);
       sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/ci") {
+      const body = await readJsonBody(request);
+      const result = ciRepo(repoPath, {
+        minScore: scoreThreshold(body.minScore),
+        write: Boolean(body.write),
+        json: true,
+      });
+      sendJson(response, 200, gateResponse(result));
       return;
     }
 
@@ -612,6 +624,15 @@ function mergeCommandPayload(result: CommandResult, extra: Record<string, unknow
   };
 }
 
+function gateResponse(result: CommandResult): Record<string, unknown> {
+  const response = commandResponse(result);
+  return {
+    ...response,
+    ok: true,
+    gateOk: result.ok,
+  };
+}
+
 function parseJsonResult(result: CommandResult): unknown {
   if (!result.ok) {
     return commandResponse(result);
@@ -678,6 +699,13 @@ function positiveNumber(value: unknown): number | undefined {
     return undefined;
   }
   return Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
+function scoreThreshold(value: unknown): number | undefined {
+  if (typeof value !== "number") {
+    return undefined;
+  }
+  return Number.isInteger(value) && value >= 0 && value <= 100 ? value : undefined;
 }
 
 function maybeJson(value: string | undefined): unknown {
@@ -1132,7 +1160,15 @@ function webDashboardHtml(): string {
         <div class="stack">
           <section id="health">
             <div class="section-head"><h2>Health</h2><span class="status" id="healthStatus">doctor</span></div>
-            <div class="section-body" id="healthPanel"><div class="empty">Loading health checks.</div></div>
+            <div class="section-body">
+              <div id="healthPanel"><div class="empty">Loading health checks.</div></div>
+              <form id="ciForm">
+                <label>Minimum Trust Score <input name="minScore" type="number" min="0" max="100" value="80"></label>
+                <label class="inline"><input name="write" type="checkbox"> Write reports</label>
+                <button class="button primary" type="submit">Run Trust CI</button>
+              </form>
+              <div class="preview-output" id="ciResult"></div>
+            </div>
           </section>
           <section id="reviews">
             <div class="section-head"><h2>Review Queue</h2><span class="status" id="doctorStatus">doctor</span></div>
@@ -1959,6 +1995,30 @@ function webDashboardHtml(): string {
       bindFileOpenButtons();
     }
 
+    function renderCiResult(payload, gateOk) {
+      const score = payload?.score || {};
+      const doctor = payload?.doctor || {};
+      const passed = gateOk === true || payload?.status === "passed";
+      const statusClass = passed ? "ok" : "bad";
+      const doctorClass = doctor?.ok ? "ok" : "bad";
+      const scoreClass = score?.passed === false ? "bad" : "ok";
+      const scoreText = score?.trustScore === undefined ? "n/a" : String(score.trustScore) + "/100";
+      const next = payload?.next || [];
+      const messages = doctor?.messages || [];
+      const nextRows = next.length
+        ? next.map((command) => '<li><code>' + h(command) + '</code></li>').join("")
+        : '<li><code>kforge ci . --json</code></li>';
+      const messageRows = messages.length
+        ? messages.map((message) => '<li><code>' + h(message) + '</code></li>').join("")
+        : '<li><code>no structural issues found</code></li>';
+      $("ciResult").innerHTML =
+        '<div class="viewer-meta"><span class="status ' + statusClass + '">' + h(payload?.status || (passed ? "passed" : "failed")) + '</span><span>trust ' +
+        h(scoreText) + '</span><span>minimum ' + h(payload?.minScore ?? "-") + '</span><span class="status ' + doctorClass + '">doctor ' +
+        h(doctor?.status || (doctor?.ok ? "clean" : "needs review")) + '</span><span class="status ' + scoreClass + '">score gate ' +
+        h(score?.passed === false ? "failed" : "passed") + '</span></div>' +
+        '<div class="viewer-grid"><div><h3>Doctor Checks</h3><ul>' + messageRows + '</ul></div><div><h3>Next Actions</h3><ul>' + nextRows + '</ul></div></div>';
+    }
+
     function renderFetchListResult(payload) {
       const items = payload?.items || [];
       const completed = payload?.dryRun ? payload?.counts?.wouldFetch : payload?.counts?.fetched;
@@ -2014,6 +2074,29 @@ function webDashboardHtml(): string {
         await api("/api/refresh", { method: "POST", body: "{}" });
         await load();
         toast("Repo refreshed");
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    });
+    $("ciForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      const write = form.get("write") === "on";
+      setBusy(true);
+      try {
+        const minScore = String(form.get("minScore") || "").trim();
+        const result = await api("/api/ci", {
+          method: "POST",
+          body: JSON.stringify({
+            minScore: minScore ? Number(minScore) : undefined,
+            write,
+          }),
+        });
+        if (write) await load();
+        renderCiResult(result.payload || {}, result.gateOk);
+        toast(result.gateOk ? "Trust CI passed" : "Trust CI failed");
       } catch (error) {
         toast(error.message || String(error));
       } finally {

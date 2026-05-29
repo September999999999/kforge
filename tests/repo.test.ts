@@ -456,6 +456,14 @@ test("web dashboard serves repo state and safe actions", async () => {
         ok?: boolean;
         claimAudit?: { counts?: { sourceDrift?: number } };
       };
+      const ciPass = (await fetchJson(`${handle.url}/api/ci`, {
+        method: "POST",
+        body: JSON.stringify({ minScore: 0 }),
+      })) as { ok?: boolean; gateOk?: boolean; payload?: CiPayload };
+      const ciFail = (await fetchJson(`${handle.url}/api/ci`, {
+        method: "POST",
+        body: JSON.stringify({ minScore: 100, write: true }),
+      })) as { ok?: boolean; gateOk?: boolean; payload?: CiPayload };
       const search = (await fetchJson(`${handle.url}/api/search`, {
         method: "POST",
         body: JSON.stringify({ query: "compiled", scopes: ["reviews"], limit: 3 }),
@@ -728,6 +736,9 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.match(html, /Knowledge Repo Dashboard/);
       assert.match(html, /id="health"/);
       assert.match(html, /healthPanel/);
+      assert.match(html, /ciForm/);
+      assert.match(html, /Run Trust CI/);
+      assert.match(html, /\/api\/ci/);
       assert.match(html, /File Preview/);
       assert.match(html, /Files/);
       assert.match(html, /sourceFetchListForm/);
@@ -767,6 +778,18 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(driftPreview.payload?.items[0]?.action, "would_create");
       assert.equal(driftPreview.payload?.items[0]?.claim, "claims/web-stale.md");
       assert.equal(stateAfterDriftPreview.claimAudit?.counts?.sourceDrift, 1);
+      assert.equal(ciPass.ok, true);
+      assert.equal(ciPass.gateOk, true);
+      assert.equal(ciPass.payload?.status, "passed");
+      assert.equal(ciPass.payload?.score.passed, true);
+      assert.equal(ciPass.payload?.minScore, 0);
+      assert.equal(ciFail.ok, true);
+      assert.equal(ciFail.gateOk, false);
+      assert.equal(ciFail.payload?.status, "failed");
+      assert.equal(ciFail.payload?.score.passed, false);
+      assert.equal(ciFail.payload?.minScore, 100);
+      assert.match(await readFile(path.join(repoPath, "indexes", "score.md"), "utf8"), /# Trust Score/);
+      assert.match(await readFile(path.join(repoPath, "indexes", "doctor.md"), "utf8"), /# Doctor Report/);
       assert.equal(search.ok, true);
       assert.equal(search.payload?.query, "compiled");
       assert.deepEqual(search.payload?.scopes, ["reviews"]);

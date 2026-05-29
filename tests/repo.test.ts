@@ -360,6 +360,7 @@ test("obsidian prints and writes a vault entry note", async () => {
 
 test("web dashboard serves repo state and safe actions", async () => {
   const repoPath = await tempRepoPath();
+  const importDir = await tempRepoPath();
   const sourceServer = await startHttpServer({
     "/web-source": {
       contentType: "text/html; charset=utf-8",
@@ -376,6 +377,9 @@ test("web dashboard serves repo state and safe actions", async () => {
   });
   try {
     initRepo(repoPath);
+    await writeFile(path.join(importDir, "Local Note.md"), "# Local Note\n\nImported through the web dashboard.\n", "utf8");
+    await mkdir(path.join(importDir, "nested"), { recursive: true });
+    await writeFile(path.join(importDir, "nested", "Data.csv"), "a,b\n1,2\n", "utf8");
     await writeFile(path.join(repoPath, "raw", "source.md"), "# Source\n", "utf8");
     await mkdir(path.join(repoPath, "raw", "_meta"), { recursive: true });
     await writeFile(path.join(repoPath, "raw", "_meta", "source.md"), "# Source Metadata\n", "utf8");
@@ -479,6 +483,26 @@ test("web dashboard serves repo state and safe actions", async () => {
         }),
       })) as { ok?: boolean; payload?: SourceFetchListPayload };
       const filesAfterFetchList = (await fetchJson(`${handle.url}/api/files`)) as {
+        ok?: boolean;
+        items?: { file?: string; scope?: string }[];
+      };
+      const importPreview = (await fetchJson(`${handle.url}/api/source-import`, {
+        method: "POST",
+        body: JSON.stringify({
+          dir: importDir,
+          titlePrefix: "Web Import",
+          dryRun: true,
+        }),
+      })) as { ok?: boolean; payload?: SourceImportPayload };
+      const importedSources = (await fetchJson(`${handle.url}/api/source-import`, {
+        method: "POST",
+        body: JSON.stringify({
+          dir: importDir,
+          titlePrefix: "Web Import",
+          note: "Imported by the web dashboard.",
+        }),
+      })) as { ok?: boolean; payload?: SourceImportPayload };
+      const filesAfterImport = (await fetchJson(`${handle.url}/api/files`)) as {
         ok?: boolean;
         items?: { file?: string; scope?: string }[];
       };
@@ -617,6 +641,7 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.match(html, /File Preview/);
       assert.match(html, /Files/);
       assert.match(html, /sourceFetchListForm/);
+      assert.match(html, /sourceImportForm/);
       assert.equal(files.ok, true);
       assert.equal(files.items?.some((item) => item.file === "raw/source.md" && item.scope === "raw"), true);
       assert.equal(files.items?.some((item) => item.file === "wiki/Existing.md" && item.scope === "wiki"), true);
@@ -672,6 +697,24 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.match(
         await readFile(path.join(repoPath, "raw", "_meta", "web-batch-list-one.md"), "utf8"),
         /Fetched by the web dashboard list/,
+      );
+      assert.equal(importPreview.ok, true);
+      assert.equal(importPreview.payload?.dryRun, true);
+      assert.equal(importPreview.payload?.counts.wouldImport, 2);
+      assert.equal(importPreview.payload?.items[0].source, "raw/web-import-local-note.md");
+      assert.equal(importedSources.ok, true);
+      assert.equal(importedSources.payload?.dryRun, false);
+      assert.equal(importedSources.payload?.counts.imported, 2);
+      assert.equal(importedSources.payload?.items[0].source, "raw/web-import-local-note.md");
+      assert.equal(importedSources.payload?.items[1].source, "raw/web-import-nested-data.csv");
+      assert.equal(
+        filesAfterImport.items?.some((item) => item.file === "raw/web-import-local-note.md" && item.scope === "raw"),
+        true,
+      );
+      assert.match(await readFile(path.join(repoPath, "raw", "web-import-local-note.md"), "utf8"), /# Local Note/);
+      assert.match(
+        await readFile(path.join(repoPath, "raw", "_meta", "web-import-local-note.md"), "utf8"),
+        /Imported by the web dashboard/,
       );
       assert.equal(contentUpdate.ok, true);
       assert.equal(contentUpdate.payload?.review, reviewFile);
@@ -742,6 +785,7 @@ test("web dashboard serves repo state and safe actions", async () => {
   } finally {
     await sourceServer.close();
     await rm(repoPath, { recursive: true, force: true });
+    await rm(importDir, { recursive: true, force: true });
   }
 });
 

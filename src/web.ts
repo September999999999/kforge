@@ -13,6 +13,7 @@ import {
   doctorRepo,
   fetchSource,
   fetchSources,
+  importSources,
   inspectRepo,
   inspectOutput,
   listOutputs,
@@ -240,6 +241,28 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
       const result = await fetchSources(repoPath, {
         text,
         titlePrefix: optionalString(body.titlePrefix),
+        author: optionalString(body.author),
+        date: optionalString(body.date),
+        license: optionalString(body.license),
+        note: optionalString(body.note),
+        dryRun: Boolean(body.dryRun),
+        json: true,
+      });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/source-import") {
+      const body = await readJsonBody(request);
+      const dir = optionalString(body.dir ?? body.directory);
+      if (!dir) {
+        sendJson(response, 400, { ok: false, error: "source directory is required" });
+        return;
+      }
+      const result = importSources(repoPath, {
+        dir,
+        titlePrefix: optionalString(body.titlePrefix),
+        url: optionalString(body.url),
         author: optionalString(body.author),
         date: optionalString(body.date),
         license: optionalString(body.license),
@@ -1042,6 +1065,13 @@ function webDashboardHtml(): string {
                 <label class="inline"><input name="dryRun" type="checkbox"> Dry run</label>
                 <button class="button" type="submit">Fetch URL List</button>
               </form>
+              <form id="sourceImportForm">
+                <label>Local Directory <input name="dir" placeholder="/Users/me/Downloads/research-folder"></label>
+                <label>Title Prefix <input name="titlePrefix" placeholder="optional prefix"></label>
+                <label>Note <input name="note" placeholder="directory import note"></label>
+                <label class="inline"><input name="dryRun" type="checkbox"> Dry run</label>
+                <button class="button" type="submit">Import Directory</button>
+              </form>
               <div class="preview-output" id="ingestResult"></div>
             </div>
           </section>
@@ -1615,9 +1645,28 @@ function webDashboardHtml(): string {
         rows;
     }
 
+    function renderImportResult(payload) {
+      const items = payload?.items || [];
+      const completed = payload?.dryRun ? payload?.counts?.wouldImport : payload?.counts?.imported;
+      const rows = items.length
+        ? '<table><thead><tr><th>Action</th><th>Path</th><th>Source</th></tr></thead><tbody>' +
+          items.map((item) => '<tr><td>' + badge(item.action) + '</td><td>' + h(item.title || item.relativePath || "-") + '<br><code>' + h(item.relativePath || "-") + '</code></td><td><code>' + h(item.source || "-") + '</code></td></tr>').join("") +
+          '</tbody></table>'
+        : '<div class="empty">No importable source files.</div>';
+      $("ingestResult").innerHTML =
+        '<div class="viewer-meta"><span class="status ok">' +
+        h(payload?.dryRun ? "dry run" : "imported") +
+        '</span><span>' +
+        h(completed ?? 0) +
+        '/' +
+        h(payload?.counts?.candidates ?? 0) +
+        ' source file(s)</span></div>' +
+        rows;
+    }
+
     function badge(status) {
       const value = h(status || "-");
-      const cls = status === "success" || status === "done" || status === "applied" || status === "accepted" || status === "fetched"
+      const cls = status === "success" || status === "done" || status === "applied" || status === "accepted" || status === "fetched" || status === "imported"
         ? "ok"
         : status === "failure" || status === "failed"
           ? "bad"
@@ -1689,6 +1738,36 @@ function webDashboardHtml(): string {
           await openFile(firstSource);
         }
         toast((dryRun ? "Previewed " : "Fetched ") + (payload.counts?.candidates || 0) + " URL source(s)");
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    });
+    $("sourceImportForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      const dryRun = form.get("dryRun") === "on";
+      setBusy(true);
+      try {
+        const result = await api("/api/source-import", {
+          method: "POST",
+          body: JSON.stringify({
+            dir: String(form.get("dir") || ""),
+            titlePrefix: String(form.get("titlePrefix") || ""),
+            note: String(form.get("note") || ""),
+            dryRun,
+          }),
+        });
+        const payload = result.payload || {};
+        await load();
+        $("ingestSummary").textContent = dryRun ? "dry run" : (payload.counts?.imported || 0) + " imported";
+        renderImportResult(payload);
+        const firstSource = (payload.items || []).find((item) => item.source)?.source;
+        if (!dryRun && firstSource) {
+          await openFile(firstSource);
+        }
+        toast((dryRun ? "Previewed " : "Imported ") + (payload.counts?.candidates || 0) + " source file(s)");
       } catch (error) {
         toast(error.message || String(error));
       } finally {

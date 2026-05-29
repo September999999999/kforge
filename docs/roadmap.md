@@ -11,7 +11,8 @@ tools to share.
 - `kforge source fetch-list`
 - `kforge source import`
 - source ingest JSON output for agent automation
-- Web dashboard single-URL and pasted URL-list source ingest into `raw/`
+- Web dashboard single-URL, pasted URL-list, and local-directory source ingest
+  into `raw/`
 - `kforge source list`
 - `kforge source inspect`
 - `kforge index`

@@ -76,9 +76,9 @@ claim-drift reviews, refresh, bootstrap, single-URL, pasted URL-list, and
 local-directory source ingest, local search with
 open-in-preview results, answer-pack writing, compile-review draft-and-attach,
 output promotion into reviews, planning multi-agent runs, writing agent launch
-scripts, and logging or finishing running agent runs as success or failure, with
-an option to mark linked tasks done on success or release claimed tasks back to
-the queue.
+scripts, dispatching fresh research queues to multiple workers, and logging or
+finishing running agent runs as success or failure, with an option to mark
+linked tasks done on success or release claimed tasks back to the queue.
 
 Create a compact handoff packet:
 

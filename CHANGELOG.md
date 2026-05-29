@@ -102,8 +102,8 @@ Initial public prototype.
 - Local Web dashboard for repo health, trust score, claim audit, review queues,
   task queues, runs, active agents, file previews, source ingest, search,
   answer packs, output promotion, multi-agent run planning, launcher script
-  writing, run logging and finishing, agent reconcile, and releasing claimed
-  tasks back to the queue.
+  writing, one-command dispatch for fresh research queues, run logging and
+  finishing, agent reconcile, and releasing claimed tasks back to the queue.
 - End-to-end examples for CLI, MCP, and TypeScript API usage.
 - Vision documentation defining the TypeScript-first implementation stance,
   optional Rust acceleration boundary, and no-Python core constraint.

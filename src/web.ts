@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   agentBoard,
+  agentDispatch,
   agentLaunch,
   agentPlan,
   agentReconcile,
@@ -385,6 +386,19 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
       const note = optionalString(body.note);
       const noPlan = Boolean(body.noPlan);
       const result = agentLaunch(repoPath, { agents, command, limit, note, noPlan, write: true, json: true });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/agent-dispatch") {
+      const body = await readJsonBody(request);
+      const agents = stringList(body.agents);
+      const command = optionalString(body.command);
+      const limit = positiveNumber(body.limit);
+      const note = optionalString(body.note);
+      const dryRun = Boolean(body.dryRun);
+      const write = body.write === undefined ? !dryRun : Boolean(body.write);
+      const result = agentDispatch(repoPath, { agents, command, limit, note, dryRun, write, json: true });
       sendJson(response, result.ok ? 200 : 400, commandResponse(result));
       return;
     }
@@ -1231,6 +1245,15 @@ function webDashboardHtml(): string {
                 <button class="button primary" type="submit">Write Launcher</button>
               </form>
               <div class="preview-output" id="launchResult"></div>
+              <form id="dispatchForm">
+                <label>Agents <textarea name="agents" placeholder="agent-a, agent-b"></textarea></label>
+                <label>Limit <input name="limit" type="number" min="1" placeholder="2"></label>
+                <label>Note <input name="note" placeholder="Dispatched from the web dashboard"></label>
+                <label>Command <textarea name="command" placeholder="codex exec --prompt {prompt}"></textarea></label>
+                <label><input name="dryRun" type="checkbox"> Preview only</label>
+                <button class="button primary" type="submit">Dispatch Workers</button>
+              </form>
+              <div class="preview-output" id="dispatchResult"></div>
             </div>
           </section>
           <div class="toast" id="toast"></div>
@@ -1915,6 +1938,27 @@ function webDashboardHtml(): string {
       bindFileOpenButtons();
     }
 
+    function renderDispatchResult(payload) {
+      const counts = payload?.counts || {};
+      const launch = payload?.launch || {};
+      const dryRun = payload?.dryRun === true;
+      const items = launch?.items || [];
+      const rows = items.length
+        ? '<table><thead><tr><th>Agent</th><th>Task</th><th>Run</th><th>Log</th></tr></thead><tbody>' +
+          items.map((item) => '<tr><td>' + h(item.agent) + '</td><td><button class="button small" type="button" data-open-file="' + h(item.task?.file || "") + '">' + h(item.task?.file || "-") + '</button></td><td><button class="button small" type="button" data-open-file="' + h(item.run?.file || "") + '">' + h(item.run?.file || "-") + '</button></td><td><button class="button small" type="button" data-open-file="' + h(item.log || "") + '">' + h(item.log || "-") + '</button></td></tr>').join("") +
+          '</tbody></table>'
+        : '<div class="empty">' + (dryRun ? "Preview only. No launcher written." : "No dispatch workers prepared.") + '</div>';
+      $("dispatchResult").innerHTML =
+        '<div class="viewer-meta"><span class="status ok">' + h(dryRun ? "preview" : "dispatched") + '</span><span>' +
+        h(counts.compileReviewsCreated ?? 0) + ' review(s)</span><span>' +
+        h(counts.tasksCreated ?? 0) + ' task(s)</span><span>' +
+        h(counts.agentRunsStarted ?? 0) + ' run(s)</span><span>' +
+        h(counts.launchWorkers ?? 0) + ' worker(s)</span><code>' +
+        h(launch?.script?.file || "not written") + '</code></div>' +
+        rows;
+      bindFileOpenButtons();
+    }
+
     function renderFetchListResult(payload) {
       const items = payload?.items || [];
       const completed = payload?.dryRun ? payload?.counts?.wouldFetch : payload?.counts?.fetched;
@@ -2171,6 +2215,32 @@ function webDashboardHtml(): string {
         await load();
         renderLaunchResult(result.payload || {});
         toast("Launcher written: " + (result.payload?.script?.file || "runs/"));
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    });
+    $("dispatchForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      setBusy(true);
+      try {
+        const dryRun = form.get("dryRun") === "on";
+        const result = await api("/api/agent-dispatch", {
+          method: "POST",
+          body: JSON.stringify({
+            agents: list(form.get("agents")),
+            limit: Number(form.get("limit")) || undefined,
+            note: String(form.get("note") || ""),
+            command: String(form.get("command") || ""),
+            dryRun,
+            write: !dryRun,
+          }),
+        });
+        await load();
+        renderDispatchResult(result.payload || {});
+        toast(dryRun ? "Dispatch preview ready" : "Dispatched " + (result.payload?.counts?.launchWorkers ?? 0) + " worker(s)");
       } catch (error) {
         toast(error.message || String(error));
       } finally {

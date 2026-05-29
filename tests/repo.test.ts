@@ -387,6 +387,7 @@ test("web dashboard serves repo state and safe actions", async () => {
     await mkdir(path.join(importDir, "nested"), { recursive: true });
     await writeFile(path.join(importDir, "nested", "Data.csv"), "a,b\n1,2\n", "utf8");
     await writeFile(path.join(repoPath, "raw", "source.md"), "# Source\n", "utf8");
+    await writeFile(path.join(repoPath, "raw", "web-dispatch.md"), "# Web Dispatch\n", "utf8");
     await writeFile(
       path.join(repoPath, "claims", "web-stale.md"),
       "# Claim: Web Stale\n\nStatus: reviewed\nConfidence: medium\nCreated: 2026-01-01\n\n## Assertion\n\nOld web claim.\n\n## Sources\n\n- `raw/source.md`\n",
@@ -735,13 +736,15 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.match(html, /\/api\/claim-review-drift/);
       assert.match(html, /data-open-file/);
       assert.match(html, /launchResult/);
+      assert.match(html, /dispatchForm/);
+      assert.match(html, /\/api\/agent-dispatch/);
       assert.equal(files.ok, true);
       assert.equal(files.items?.some((item) => item.file === "raw/source.md" && item.scope === "raw"), true);
       assert.equal(files.items?.some((item) => item.file === "wiki/Existing.md" && item.scope === "wiki"), true);
       assert.equal(files.items?.some((item) => item.file === reviewFile && item.scope === "reviews"), true);
       assert.equal(files.items?.some((item) => item.file === "raw/_meta/source.md"), false);
       assert.equal(state.ok, true);
-      assert.equal(state.dashboard?.counts?.rawSources, 1);
+      assert.equal(state.dashboard?.counts?.rawSources, 2);
       assert.equal(state.dashboard?.counts?.reviews, 2);
       assert.equal(state.dashboard?.health?.doctor, "clean");
       assert.equal(typeof state.dashboard?.health?.trustScore, "number");
@@ -963,6 +966,62 @@ test("web dashboard creates claim drift reviews from health actions", async () =
         await readFile(path.join(repoPath, created.payload?.items[0]?.review ?? ""), "utf8"),
         /Review trigger: `raw\/source.md` was modified on 2026-02-01/,
       );
+    } finally {
+      await handle.close();
+    }
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test("web dashboard dispatches parallel agent workers", async () => {
+  const repoPath = await tempRepoPath();
+  try {
+    initRepo(repoPath);
+    await writeFile(path.join(repoPath, "raw", "web-dispatch.md"), "# Web Dispatch\n", "utf8");
+
+    const handle = await serveWebDashboard(repoPath, { port: 0 });
+    try {
+      const preview = (await fetchJson(`${handle.url}/api/agent-dispatch`, {
+        method: "POST",
+        body: JSON.stringify({
+          agents: ["web-dispatch-a"],
+          limit: 1,
+          dryRun: true,
+        }),
+      })) as { ok?: boolean; payload?: AgentDispatchPayload };
+      const dispatch = (await fetchJson(`${handle.url}/api/agent-dispatch`, {
+        method: "POST",
+        body: JSON.stringify({
+          agents: ["web-dispatch-a"],
+          command: "printf dispatch-{agent}:{run}",
+          limit: 1,
+          note: "web dispatch",
+        }),
+      })) as { ok?: boolean; payload?: AgentDispatchPayload };
+      const state = (await fetchJson(`${handle.url}/api/state`)) as {
+        ok?: boolean;
+        agents?: { counts?: { agents?: number; runningRuns?: number; claimedTasks?: number } };
+      };
+      const runFile = dispatch.payload?.launch?.items[0]?.run.file ?? "";
+
+      assert.equal(preview.ok, true);
+      assert.equal(preview.payload?.dryRun, true);
+      assert.equal(preview.payload?.counts.compileReviewsWouldCreate, 1);
+      assert.equal(preview.payload?.launch, undefined);
+      assert.equal(dispatch.ok, true);
+      assert.equal(dispatch.payload?.counts.compileReviewsCreated, 1);
+      assert.equal(dispatch.payload?.counts.tasksCreated, 1);
+      assert.equal(dispatch.payload?.counts.agentRunsStarted, 1);
+      assert.equal(dispatch.payload?.counts.launchWorkers, 1);
+      assert.equal(dispatch.payload?.launch?.source, "planned");
+      assert.match(dispatch.payload?.launch?.script.file ?? "", /^runs\/.+agent-launch.*\.sh$/);
+      assert.match(await readFile(path.join(repoPath, dispatch.payload?.launch?.script.file ?? ""), "utf8"), /dispatch-web-dispatch-a/);
+      assert.match(runFile, /^runs\/.+web-dispatch-a\.md$/);
+      assert.match(await readFile(path.join(repoPath, runFile), "utf8"), /web dispatch/);
+      assert.equal(state.agents?.counts?.agents, 1);
+      assert.equal(state.agents?.counts?.runningRuns, 1);
+      assert.equal(state.agents?.counts?.claimedTasks, 1);
     } finally {
       await handle.close();
     }

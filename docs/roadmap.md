@@ -100,6 +100,8 @@ Goal: make the protocol usable from common AI and PKM environments.
   surfaces
 - one-command parallel dispatch through `kforge agent dispatch`, combining
   bootstrap, run assignment, and launcher preparation for fresh research queues
+- Web dashboard controls for dispatching fresh research queues to multiple
+  workers in one action
 - Web dashboard launcher flow that can reuse the exact planned agent batch
 - Web dashboard launcher result links for worker tasks, runs, and logs
 - Web dashboard controls to log and finish running agent runs as success or

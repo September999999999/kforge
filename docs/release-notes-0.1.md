@@ -59,8 +59,10 @@ Use this release if you want:
 - Safe Web actions can save Proposed Content, accept or reject reviews,
   dry-run and apply accepted reviews, preview or apply agent reconcile, refresh
   indexes, bootstrap review-first work, plan multi-agent runs, write launcher
-  scripts, log runs, finish runs as success or failure, mark linked tasks done
-  on success, and release claimed tasks back to the queue.
+  scripts, dispatch fresh research queues to multiple workers, log runs, finish
+  runs as success or failure, mark linked tasks done on success, and release
+  claimed tasks back to the queue.
+  The Web dashboard can release claimed tasks back to the queue.
 - `kforge agent dispatch` combines bootstrap, multi-agent run assignment, and
   launcher preparation for newly ingested research queues.
 

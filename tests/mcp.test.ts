@@ -40,6 +40,7 @@ test("mcp server exposes kforge tools over stdio", async () => {
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_fetch_list"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_import"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_refresh"), true);
+    assert.equal(tools.tools.some((tool) => tool.name === "kforge_ci"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_list"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_inspect"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_context"), true);
@@ -906,6 +907,19 @@ test("mcp server exposes kforge tools over stdio", async () => {
     assert.equal(typeof scorePayload.trustScore, "number");
     assert.equal(scorePayload.passed, true);
     assert.equal(scorePayload.metrics?.some((item) => item.label === "doctor health"), true);
+
+    const ci = await client.callTool({
+      name: "kforge_ci",
+      arguments: {
+        json: true,
+        minScore: 60,
+      },
+    });
+    const ciPayload = JSON.parse(firstText(ci.content)) as { status?: string; doctor?: unknown; score?: unknown; minScore?: number };
+    assert.match(ciPayload.status ?? "", /^(passed|failed)$/);
+    assert.equal(ciPayload.minScore, 60);
+    assert.equal(Boolean(ciPayload.doctor), true);
+    assert.equal(Boolean(ciPayload.score), true);
 
     const status = await client.callTool({
       name: "kforge_review_status",

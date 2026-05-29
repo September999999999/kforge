@@ -252,6 +252,7 @@ kforge agent step . --agent local-agent --json
 kforge agent draft . --agent local-agent --json
 kforge agent list
 kforge score .
+kforge ci . --json --min-score 80
 kforge graph .
 kforge compile . --source raw/llm-knowledge-bases.md --target wiki/Provenance.md
 kforge search . --query provenance
@@ -599,6 +600,8 @@ kforge demo [path] [--force]
                          create a ready-to-browse demo repo
 kforge bootstrap [path] [--agent <name>] [--limit <n>] [--dry-run] [--json]
                          stage compile reviews, tasks, and optional agent runs
+kforge ci [path] [--write] [--json] [--min-score <n>]
+                         run doctor and trust score gates
 kforge index [path]     generate source, wiki, claim, and review indexes
 kforge refresh [path]   refresh indexes and derived reports
 kforge doctor [path] [--write] [--json]

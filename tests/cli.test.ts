@@ -17,6 +17,7 @@ test("cli help exposes the public command surface", async () => {
   assert.match(result.stdout, /kforge 0\.1\.0/);
   assert.match(result.stdout, /kforge demo \[path\] \[--force\]/);
   assert.match(result.stdout, /kforge bootstrap \[path\].*\[--agent <name>\].*\[--json\]/);
+  assert.match(result.stdout, /kforge ci \[path\].*\[--min-score <n>\]/);
   assert.match(result.stdout, /kforge refresh \[path\]/);
   assert.match(result.stdout, /kforge doctor \[path\] \[--write\] \[--json\]/);
   assert.match(result.stdout, /kforge score \[path\] \[--write\] \[--json\]/);
@@ -86,6 +87,8 @@ test("cli can run the documented demo workflow", async () => {
     const scoreJson = await runCli(["score", repoPath, "--json"]);
     const scoreGatePass = await runCli(["score", repoPath, "--json", "--min-score", "80"]);
     const scoreGateFail = await runCli(["score", repoPath, "--json", "--min-score", "90"]);
+    const ciPass = await runCli(["ci", repoPath, "--json", "--min-score", "80"]);
+    const ciFail = await runCli(["ci", repoPath, "--json", "--min-score", "90"]);
     const doctor = await runCli(["doctor", repoPath, "--write"]);
 
     assert.equal(init.exitCode, 0);
@@ -136,6 +139,10 @@ test("cli can run the documented demo workflow", async () => {
     assert.equal(JSON.parse(scoreGatePass.stdout).passed, true);
     assert.equal(scoreGateFail.exitCode, 1);
     assert.equal(JSON.parse(scoreGateFail.stdout).passed, false);
+    assert.equal(ciPass.exitCode, 0);
+    assert.equal(JSON.parse(ciPass.stdout).status, "passed");
+    assert.equal(ciFail.exitCode, 1);
+    assert.equal(JSON.parse(ciFail.stdout).status, "failed");
     assert.equal(doctor.exitCode, 0);
     assert.match(doctor.stdout, /indexes\/doctor.md/);
     assert.match(await readFile(path.join(repoPath, "indexes", "doctor.md"), "utf8"), /Status: clean/);

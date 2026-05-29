@@ -53,6 +53,7 @@ node dist/src/cli.js --help
 node dist/src/mcp.js --help
 demo=$(mktemp -d)
 node dist/src/cli.js init "$demo" --example
+node dist/src/cli.js ci "$demo" --json --min-score 80
 node dist/src/cli.js refresh "$demo"
 node dist/src/cli.js agent next "$demo" --agent release-agent --json
 node dist/src/cli.js agent step "$demo" --agent release-agent --json

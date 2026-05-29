@@ -22,6 +22,7 @@ import {
   askRepo,
   applyReview,
   bootstrapRepo,
+  ciRepo,
   claimTask,
   compileDraftRepo,
   compilePlanRepo,
@@ -177,6 +178,22 @@ export function createKforgeMcpServer(options: McpOptions = {}): McpServer {
       }),
     },
     async ({ path: repoPath }) => runAsTool(() => refreshRepo(toolRepoPath(defaultRepoPath, repoPath))),
+  );
+
+  server.registerTool(
+    "kforge_ci",
+    {
+      title: "Run Trust CI",
+      description: "Run doctor plus trust score gates for a kforge repo.",
+      inputSchema: z.object({
+        path: repoPathSchema,
+        write: z.boolean().optional(),
+        json: z.boolean().optional(),
+        minScore: z.number().int().min(0).max(100).optional(),
+      }),
+    },
+    async ({ path: repoPath, write, json, minScore }) =>
+      runAsTool(() => ciRepo(toolRepoPath(defaultRepoPath, repoPath), { write, json, minScore })),
   );
 
   server.registerTool(

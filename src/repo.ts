@@ -52,6 +52,29 @@ export interface DoctorOptions {
   json?: boolean;
 }
 
+export interface DoctorPayload {
+  ok: boolean;
+  status: "clean" | "needs_attention";
+  messages: string[];
+  checkedAt: string;
+}
+
+export interface CiOptions {
+  write?: boolean;
+  json?: boolean;
+  minScore?: number;
+}
+
+export interface CiPayload {
+  ok: boolean;
+  updatedAt: string;
+  status: "passed" | "failed";
+  minScore?: number;
+  doctor: DoctorPayload;
+  score: ScorePayload;
+  next: string[];
+}
+
 export interface WorkflowOptions {
   write?: boolean;
 }
@@ -1223,6 +1246,48 @@ export function refreshRepo(repoPath: string): CommandResult {
   ];
 
   return { ok, messages };
+}
+
+export function ciRepo(repoPath: string, options: CiOptions = {}): CommandResult {
+  requireRepo(repoPath);
+
+  const doctorResultJson = doctorRepo(repoPath, { write: options.write, json: true });
+  const scoreResultJson = scoreRepo(repoPath, { write: options.write, json: true, minScore: options.minScore });
+  const doctor = JSON.parse(doctorResultJson.messages[0] ?? "{}") as DoctorPayload;
+  const score = JSON.parse(scoreResultJson.messages[0] ?? "{}") as ScorePayload;
+  const ok = doctorResultJson.ok && scoreResultJson.ok;
+  const payload: CiPayload = {
+    ok,
+    updatedAt: today(),
+    status: ok ? "passed" : "failed",
+    ...(options.minScore === undefined ? {} : { minScore: options.minScore }),
+    doctor,
+    score,
+    next: ok
+      ? ["kforge ci . --json", "kforge workflow ."]
+      : ["kforge doctor . --json", "kforge score . --json", "kforge refresh ."],
+  };
+
+  if (options.json) {
+    return { ok, messages: [JSON.stringify(payload, null, 2)] };
+  }
+
+  return {
+    ok,
+    messages: [
+      "# Trust CI",
+      "",
+      `Updated: ${payload.updatedAt}`,
+      `Status: ${payload.status}`,
+      `Doctor: ${doctor.status}`,
+      `Trust Score: ${score.trustScore === undefined ? "n/a" : `${score.trustScore}/100`}`,
+      ...(options.minScore === undefined ? [] : [`Minimum Score: ${options.minScore}`, `Score Gate: ${score.passed ? "passed" : "failed"}`]),
+      "",
+      "## Next",
+      "",
+      ...payload.next.map((item) => `- \`${item}\``),
+    ],
+  };
 }
 
 export function bootstrapRepo(repoPath: string, options: BootstrapOptions = {}): CommandResult {
@@ -3871,7 +3936,7 @@ function doctorResult(ok: boolean, messages: string[], options: DoctorOptions): 
           status: ok ? "clean" : "needs_attention",
           messages,
           checkedAt: today(),
-        },
+        } satisfies DoctorPayload,
         null,
         2,
       ),

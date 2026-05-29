@@ -20,6 +20,7 @@ import {
   auditClaims,
   claimTask,
   bootstrapRepo,
+  ciRepo,
   compileDraftRepo,
   compilePlanRepo,
   compileReviewRepo,
@@ -95,6 +96,7 @@ import {
   type RunStartPayload,
   type SearchPayload,
   type ClaimReviewDriftPayload,
+  type CiPayload,
   type ScorePayload,
   type SourceImportPayload,
   type SourceFetchListPayload,
@@ -2882,6 +2884,31 @@ test("score reports trust metrics for an example repo", async () => {
     assert.equal(failingGate.ok, false);
     assert.equal(failingPayload.passed, false);
     assert.equal(failingPayload.minScore, 90);
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test("ci combines doctor and trust score gates", async () => {
+  const repoPath = await tempRepoPath();
+  try {
+    initRepo(repoPath, { example: true });
+
+    const pass = ciRepo(repoPath, { json: true, minScore: 80 });
+    const fail = ciRepo(repoPath, { json: true, minScore: 90 });
+    const passPayload = JSON.parse(pass.messages[0]) as CiPayload;
+    const failPayload = JSON.parse(fail.messages[0]) as CiPayload;
+
+    assert.equal(pass.ok, true);
+    assert.equal(passPayload.ok, true);
+    assert.equal(passPayload.status, "passed");
+    assert.equal(passPayload.doctor.ok, true);
+    assert.equal(passPayload.score.passed, true);
+    assert.equal(fail.ok, false);
+    assert.equal(failPayload.ok, false);
+    assert.equal(failPayload.status, "failed");
+    assert.equal(failPayload.score.passed, false);
+    assert.equal(failPayload.minScore, 90);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }

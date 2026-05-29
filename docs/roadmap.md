@@ -121,6 +121,7 @@ Goal: make the protocol usable from common AI and PKM environments.
 Goal: make knowledge quality testable.
 
 - CI-friendly doctor checks
+- combined `kforge ci` gate for doctor plus trust score thresholds
 - trust score command, including JSON output and minimum-score gates for CI and
   agent thresholds
 - Web dashboard health/lint panel

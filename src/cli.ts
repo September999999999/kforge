@@ -18,6 +18,7 @@ import {
   askRepo,
   applyReview,
   claimTask,
+  ciRepo,
   bootstrapRepo,
   compileDraftRepo,
   compilePlanRepo,
@@ -82,6 +83,7 @@ type Command =
   | "init"
   | "demo"
   | "bootstrap"
+  | "ci"
   | "index"
   | "refresh"
   | "doctor"
@@ -203,6 +205,17 @@ function runRepoCommand(
       dryRun,
       note,
       json: bootstrapJson,
+    });
+  }
+
+  if (command === "ci") {
+    const parsed = parseArgs(args);
+    const ciRepoPath = resolveRepoPath(parsed.positionals[0] ?? ".");
+    const minScoreValue = oneOption(parsed.options, "min-score", false);
+    return ciRepo(ciRepoPath, {
+      write: flagOption(parsed.options, "write"),
+      json: flagOption(parsed.options, "json"),
+      minScore: minScoreValue ? parsePercentageInteger(minScoreValue, "--min-score") : undefined,
     });
   }
 
@@ -1087,6 +1100,7 @@ function isCommand(value: string): value is Command {
     value === "init" ||
     value === "demo" ||
     value === "bootstrap" ||
+    value === "ci" ||
     value === "index" ||
     value === "refresh" ||
     value === "doctor" ||
@@ -1123,6 +1137,8 @@ Usage:
   kforge demo [path] [--force]                         create a ready-to-browse demo repo
   kforge bootstrap [path] [--agent <name>] [--limit <n>] [--dry-run] [--json]
                                                        stage compile reviews, tasks, and optional agent runs
+  kforge ci [path] [--write] [--json] [--min-score <n>]
+                                                       run doctor and trust score gates
   kforge index [path]                                  generate inventory files
   kforge refresh [path]                                refresh indexes and derived reports
   kforge doctor [path] [--write] [--json]              run health checks

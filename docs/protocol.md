@@ -653,11 +653,15 @@ lower the trust score until they are marked `accepted`, `rejected`, or
 Examples:
 
 ```bash
+kforge ci . --json --min-score 80
 kforge score .
 kforge score . --write
 kforge score . --json
 kforge score . --json --min-score 80
 ```
+
+`kforge ci` combines `doctor` and `score` into one CI-friendly gate. It fails if
+doctor fails or if the trust score is below `--min-score`.
 
 With `--write`, the report is saved to `indexes/score.md`. With `--json`, stdout
 becomes a machine-readable Trust CI payload with counts, metrics, doctor status,

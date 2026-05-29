@@ -80,6 +80,7 @@ Use this release if you want:
 - `kforge score` summarizes provenance, review debt, target coverage, and
   doctor health, with JSON output and minimum-score gates for Trust CI
   thresholds.
+- `kforge ci` combines doctor and trust score gates for CI and agent handoff.
 - `kforge claim audit` and `claim review-drift` surface source drift and review
   debt, with JSON output for stale-review automation.
 - Review quality gates block acceptance, apply, and accepted output promotion

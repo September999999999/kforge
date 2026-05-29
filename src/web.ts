@@ -10,6 +10,7 @@ import {
   bootstrapRepo,
   dashboardRepo,
   doctorRepo,
+  fetchSource,
   inspectRepo,
   inspectOutput,
   listOutputs,
@@ -201,6 +202,26 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
         title: optionalString(body.title),
         summary: optionalString(body.summary),
         status: promoteStatus(body.status),
+        json: true,
+      });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/source-fetch") {
+      const body = await readJsonBody(request);
+      const sourceUrl = optionalString(body.url);
+      if (!sourceUrl) {
+        sendJson(response, 400, { ok: false, error: "source URL is required" });
+        return;
+      }
+      const result = await fetchSource(repoPath, {
+        url: sourceUrl,
+        title: optionalString(body.title),
+        author: optionalString(body.author),
+        date: optionalString(body.date),
+        license: optionalString(body.license),
+        note: optionalString(body.note),
         json: true,
       });
       sendJson(response, result.ok ? 200 : 400, commandResponse(result));
@@ -961,6 +982,18 @@ function webDashboardHtml(): string {
         </div>
 
         <div class="stack" id="actions">
+          <section id="ingest">
+            <div class="section-head"><h2>Ingest</h2><span class="subtle" id="ingestSummary"></span></div>
+            <div class="section-body">
+              <form id="sourceFetchForm">
+                <label>URL <input name="url" type="url" placeholder="https://example.com/article"></label>
+                <label>Title <input name="title" placeholder="optional title override"></label>
+                <label>Note <input name="note" placeholder="capture note"></label>
+                <button class="button primary" type="submit">Fetch Source</button>
+              </form>
+              <div class="preview-output" id="ingestResult"></div>
+            </div>
+          </section>
           <section id="files">
             <div class="section-head"><h2>Files</h2><span class="subtle" id="fileSummary"></span></div>
             <div class="section-body" id="fileList"><div class="empty">Loading files.</div></div>
@@ -1470,6 +1503,33 @@ function webDashboardHtml(): string {
         await api("/api/refresh", { method: "POST", body: "{}" });
         await load();
         toast("Repo refreshed");
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    });
+    $("sourceFetchForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      setBusy(true);
+      try {
+        const result = await api("/api/source-fetch", {
+          method: "POST",
+          body: JSON.stringify({
+            url: String(form.get("url") || ""),
+            title: String(form.get("title") || ""),
+            note: String(form.get("note") || ""),
+          }),
+        });
+        const payload = result.payload || {};
+        await load();
+        $("ingestSummary").textContent = payload.source || "";
+        $("ingestResult").innerHTML = '<div class="viewer-meta"><span class="status ok">fetched</span><code>' + h(payload.source || "") + '</code></div>';
+        if (payload.source) {
+          await openFile(payload.source);
+        }
+        toast("Fetched source: " + (payload.source || "raw/"));
       } catch (error) {
         toast(error.message || String(error));
       } finally {

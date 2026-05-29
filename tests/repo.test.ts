@@ -343,6 +343,12 @@ test("obsidian prints and writes a vault entry note", async () => {
 
 test("web dashboard serves repo state and safe actions", async () => {
   const repoPath = await tempRepoPath();
+  const sourceServer = await startHttpServer({
+    "/web-source": {
+      contentType: "text/html; charset=utf-8",
+      body: "<html><head><title>Web Source Article</title></head><body><h1>Web Source Article</h1><p>Captured from the dashboard.</p></body></html>",
+    },
+  });
   try {
     initRepo(repoPath);
     await writeFile(path.join(repoPath, "raw", "source.md"), "# Source\n", "utf8");
@@ -415,6 +421,22 @@ test("web dashboard serves repo state and safe actions", async () => {
           files: ["outputs/web-answer.md"],
         }),
       })) as { ok?: boolean; payload?: AskPayload };
+      const fetchedSource = (await fetchJson(`${handle.url}/api/source-fetch`, {
+        method: "POST",
+        body: JSON.stringify({
+          url: `${sourceServer.url}/web-source`,
+          title: "Web Source Article",
+          note: "Fetched by the web dashboard.",
+        }),
+      })) as { ok?: boolean; payload?: SourceFetchPayload };
+      const filesAfterFetch = (await fetchJson(`${handle.url}/api/files`)) as {
+        ok?: boolean;
+        items?: { file?: string; scope?: string }[];
+      };
+      const fetchedPreview = (await fetchJson(`${handle.url}/api/file?path=${encodeURIComponent("raw/web-source-article.md")}`)) as {
+        ok?: boolean;
+        content?: string;
+      };
       const contentUpdate = (await fetchJson(`${handle.url}/api/review-content`, {
         method: "POST",
         body: JSON.stringify({
@@ -567,6 +589,12 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(ask.payload?.written, true);
       assert.match(ask.payload?.output ?? "", /^outputs\/.+what-did-the-web-dashboard-produce-answer-pack\.md$/);
       assert.match(await readFile(path.join(repoPath, ask.payload?.output ?? ""), "utf8"), /# Answer Pack/);
+      assert.equal(fetchedSource.ok, true);
+      assert.equal(fetchedSource.payload?.source, "raw/web-source-article.md");
+      assert.equal(fetchedSource.payload?.metadata, "raw/_meta/web-source-article.md");
+      assert.equal(filesAfterFetch.items?.some((item) => item.file === "raw/web-source-article.md" && item.scope === "raw"), true);
+      assert.match(fetchedPreview.content ?? "", /# Web Source Article/);
+      assert.match(await readFile(path.join(repoPath, "raw", "_meta", "web-source-article.md"), "utf8"), /Fetched by the web dashboard/);
       assert.equal(contentUpdate.ok, true);
       assert.equal(contentUpdate.payload?.review, reviewFile);
       assert.equal(contentUpdate.payload?.source, "inline content");
@@ -625,6 +653,7 @@ test("web dashboard serves repo state and safe actions", async () => {
       await handle.close();
     }
   } finally {
+    await sourceServer.close();
     await rm(repoPath, { recursive: true, force: true });
   }
 });

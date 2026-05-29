@@ -302,10 +302,13 @@ Check the shared board when several agents are active:
 
 ```bash
 kforge agent board ./my-topic --json
+kforge agent reconcile ./my-topic --write --json
 ```
 
 The board shows active agents, open tasks, running runs, claimed tasks without
-runs, and running runs whose task is no longer claimed.
+runs, and running runs whose task is no longer claimed. `agent reconcile`
+dry-runs by default; add `--write` when you want kforge to release orphan claims
+and reclaim open tasks that already have a running run.
 
 The draft includes source metadata, source excerpts, and existing target
 context. Edit it before attaching it back to the review.

@@ -56,6 +56,7 @@ test("mcp server exposes kforge tools over stdio", async () => {
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_draft"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_status"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_board"), true);
+    assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_reconcile"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_plan"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_launch"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_agent_finish"), true);
@@ -486,6 +487,14 @@ test("mcp server exposes kforge tools over stdio", async () => {
     assert.equal((agentBoardPayload.counts?.claimedTasks ?? 0) >= 2, true);
     assert.equal(agentBoardPayload.agents?.some((agent) => agent.agent === "mcp-plan-a"), true);
     assert.match(agentBoardPayload.next?.join("\n") ?? "", /task list/);
+
+    const agentReconcile = await client.callTool({
+      name: "kforge_agent_reconcile",
+      arguments: {
+        json: true,
+      },
+    });
+    assert.equal(JSON.parse(firstText(agentReconcile.content)).counts?.actions, 0);
 
     const compile = await client.callTool({
       name: "kforge_compile",

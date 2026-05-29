@@ -11,6 +11,7 @@ import {
   agentFinish,
   agentLaunch,
   agentPlan,
+  agentReconcile,
   agentStatus,
   agentStep,
   auditClaims,
@@ -650,6 +651,15 @@ function runAgentCommand(args: string[]): CommandResult {
     return agentBoard(repoPath, { json });
   }
 
+  if (subcommand === "reconcile") {
+    const parsed = parseArgs(rest);
+    const repoPath = resolveRepoPath(parsed.positionals[0] ?? ".");
+    const write = flagOption(parsed.options, "write");
+    const note = oneOption(parsed.options, "note", false);
+    const json = flagOption(parsed.options, "json");
+    return agentReconcile(repoPath, { write, note, json });
+  }
+
   if (subcommand === "plan") {
     const parsed = parseArgs(rest);
     const repoPath = resolveRepoPath(parsed.positionals[0] ?? ".");
@@ -1117,6 +1127,7 @@ Usage:
                                                        create a compile draft for current work
   kforge agent status [path] --agent <name> [--json]    show current work for one agent
   kforge agent board [path] [--json]                    show active agents, runs, tasks, and coordination gaps
+  kforge agent reconcile [path] [--write] [--json]      reconcile recoverable agent coordination gaps
   kforge agent plan [path] --agent <name> --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]
                                                        assign independent runs to multiple agents
   kforge agent launch [path] --agent <name> --agent <name> [--command <template>] [--write] [--exec] [--json]

@@ -92,6 +92,7 @@ Goal: make the protocol usable from common AI and PKM environments.
   surfaces
 - multi-agent board state with active runs, claimed tasks, and coordination gap
   detection
+- explicit multi-agent reconcile command for recoverable coordination drift
 - auditable run records with next/start/log/finish lifecycle, success/failure
   state, JSON output, and MCP tools
 - high-level agent draft loop with `agent next`, `agent step`, `agent draft`,

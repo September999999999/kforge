@@ -12,6 +12,7 @@ import {
   agentFinish,
   agentLaunch,
   agentPlan,
+  agentReconcile,
   agentStatus,
   agentStep,
   askRepo,
@@ -72,6 +73,7 @@ import {
   type AgentFinishPayload,
   type AgentLaunchPayload,
   type AgentPlanPayload,
+  type AgentReconcilePayload,
   type AgentStatusPayload,
   type AgentStepPayload,
   type BootstrapPayload,
@@ -1589,6 +1591,61 @@ test("agent board summarizes active multi-agent coordination", async () => {
     assert.match(board.agents.find((agent) => agent.agent === "board-agent")?.next.join("\n") ?? "", /agent step/);
     assert.match(board.next.join("\n"), /agent plan|run start|run inspect/);
     assert.match(agentBoard(repoPath).messages[0], /# Agent Board/);
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test("agent reconcile dry-runs and repairs recoverable coordination drift", async () => {
+  const repoPath = await tempRepoPath();
+  try {
+    initRepo(repoPath);
+    await writeFile(path.join(repoPath, "raw", "source.md"), "# Source\n", "utf8");
+    createReview(repoPath, {
+      title: "Reconcile Run",
+      targets: ["wiki/Reconcile Run.md"],
+      sources: ["raw/source.md"],
+      kind: "compile",
+    });
+    createReview(repoPath, {
+      title: "Reconcile Orphan",
+      targets: ["wiki/Reconcile Orphan.md"],
+      sources: ["raw/source.md"],
+      kind: "compile",
+    });
+
+    const plan = JSON.parse(agentPlan(repoPath, { agents: ["repair-agent"], limit: 1, json: true }).messages[0]) as AgentPlanPayload;
+    const orphan = JSON.parse(nextTask(repoPath, { agent: "orphan-agent", json: true }).messages[0]) as TaskNextPayload;
+    assert.ok(plan.assignments[0]);
+    assert.ok(orphan.task);
+
+    const runTaskPath = path.join(repoPath, plan.assignments[0].task.file);
+    await writeFile(
+      runTaskPath,
+      (await readFile(runTaskPath, "utf8")).replace("Status: claimed", "Status: open").replace("Owner: repair-agent", "Owner: -").replace(`Claimed: ${today()}`, "Claimed: -"),
+      "utf8",
+    );
+
+    const dryRun = JSON.parse(agentReconcile(repoPath, { json: true }).messages[0]) as AgentReconcilePayload;
+    assert.equal(dryRun.dryRun, true);
+    assert.equal(dryRun.counts.actions, 2);
+    assert.equal(dryRun.counts.applied, 0);
+    assert.equal(dryRun.actions.some((action) => action.action === "release_orphan_claim" && action.task === orphan.task?.file), true);
+    assert.equal(dryRun.actions.some((action) => action.action === "claim_run_task" && action.run === plan.assignments[0]?.run.file), true);
+    assert.equal((JSON.parse(agentBoard(repoPath, { json: true }).messages[0]) as AgentBoardPayload).counts.orphanClaimedTasks, 1);
+
+    const repaired = JSON.parse(
+      agentReconcile(repoPath, { write: true, note: "repair drift", json: true }).messages[0],
+    ) as AgentReconcilePayload;
+    const board = JSON.parse(agentBoard(repoPath, { json: true }).messages[0]) as AgentBoardPayload;
+
+    assert.equal(repaired.dryRun, false);
+    assert.equal(repaired.counts.applied, 2);
+    assert.equal(board.counts.orphanClaimedTasks, 0);
+    assert.equal(board.counts.runsWithoutClaimedTask, 0);
+    assert.equal(board.agents.some((agent) => agent.agent === "repair-agent"), true);
+    assert.match(await readFile(path.join(repoPath, orphan.task.file), "utf8"), /repair drift/);
+    assert.match(agentReconcile(repoPath).messages[0], /# Agent Reconcile/);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }

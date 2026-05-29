@@ -15,6 +15,7 @@ import {
   agentFinish,
   agentLaunch,
   agentPlan,
+  agentReconcile,
   agentStatus,
   agentStep,
   auditClaims,
@@ -504,6 +505,22 @@ export function createKforgeMcpServer(options: McpOptions = {}): McpServer {
     },
     async ({ path: repoPath, json }) =>
       runAsTool(() => agentBoard(toolRepoPath(defaultRepoPath, repoPath), { json })),
+  );
+
+  server.registerTool(
+    "kforge_agent_reconcile",
+    {
+      title: "Reconcile agent board",
+      description: "Dry-run or apply recoverable fixes for orphan claimed tasks and running runs whose tasks are not claimed.",
+      inputSchema: z.object({
+        path: repoPathSchema,
+        write: z.boolean().optional(),
+        note: z.string().optional(),
+        json: z.boolean().optional(),
+      }),
+    },
+    async ({ path: repoPath, write, note, json }) =>
+      runAsTool(() => agentReconcile(toolRepoPath(defaultRepoPath, repoPath), { write, note, json })),
   );
 
   server.registerTool(

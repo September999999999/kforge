@@ -558,6 +558,7 @@ kforge agent step . --agent agent-a --json
 kforge agent draft . --agent agent-a --json
 kforge agent status . --agent agent-a --json
 kforge agent board . --json
+kforge agent reconcile . --write --json
 kforge agent launch . --agent agent-a --agent agent-b --command 'codex exec --prompt {prompt}' --write --json
 kforge agent finish . --agent agent-a --status success --task-done --json
 kforge agent list
@@ -576,6 +577,11 @@ commands.
 `agent board` shows shared multi-agent state: active agents, open tasks,
 running runs, claimed tasks without runs, and running runs whose task is no
 longer claimed.
+`agent reconcile` is the explicit repair command for recoverable board drift. By
+default it dry-runs the planned fixes; with `--write`, it releases claimed tasks
+that no longer have a running run and reclaims open tasks for their existing
+running run's agent. It skips missing or already-done tasks so a human or agent
+can inspect those cases.
 `agent launch` generates a provider-neutral shell launcher for several worker
 processes. By default it plans fresh runs first; with `--no-plan`, it reuses
 existing running assignments for the named agents. Command templates can use

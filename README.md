@@ -378,6 +378,14 @@ kforge agent plan ~/research/my-topic \
 This sequentially claims different open tasks, starts one auditable run per
 assigned agent, and prints the `agent step` command each worker should run next.
 
+If a long-running worker exits early, inspect and repair recoverable
+coordination drift:
+
+```bash
+kforge agent board ~/research/my-topic --json
+kforge agent reconcile ~/research/my-topic --write --json
+```
+
 Generate a parallel launcher for those workers:
 
 ```bash
@@ -602,6 +610,8 @@ kforge agent status [path] --agent <name> [--json]
                          show current work for one agent
 kforge agent board [path] [--json]
                          show active agents, runs, tasks, and coordination gaps
+kforge agent reconcile [path] [--write] [--json]
+                         reconcile recoverable agent coordination gaps
 kforge agent plan [path] --agent <name> --agent <name> [--limit <n>] [--no-seed] [--note <text>] [--json]
                          assign independent runs to multiple agents
 kforge agent launch [path] --agent <name> --agent <name> [--command <template>] [--write] [--exec] [--json]

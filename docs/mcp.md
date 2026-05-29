@@ -68,6 +68,8 @@ accepts a `path` argument when an agent needs to operate on a different repo.
   commands for one agent
 - `kforge_agent_board`: summarize active agents, running runs, claimed tasks,
   open tasks, and coordination gaps
+- `kforge_agent_reconcile`: dry-run or apply recoverable coordination fixes for
+  orphan claimed tasks and running runs whose tasks are not claimed
 - `kforge_agent_plan`: assign independent review-backed tasks and start
   auditable runs for multiple agents in one deterministic pass
 - `kforge_agent_launch`: generate, write, or execute a provider-neutral shell

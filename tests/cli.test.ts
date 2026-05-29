@@ -29,6 +29,7 @@ test("cli help exposes the public command surface", async () => {
   assert.match(result.stdout, /kforge agent draft \[path\].*--agent <name>.*\[--json\]/);
   assert.match(result.stdout, /kforge agent status \[path\].*--agent <name>.*\[--json\]/);
   assert.match(result.stdout, /kforge agent board \[path\] \[--json\]/);
+  assert.match(result.stdout, /kforge agent reconcile \[path\] \[--write\] \[--json\]/);
   assert.match(result.stdout, /kforge agent plan \[path\].*--agent <name>.*--agent <name>.*\[--json\]/);
   assert.match(result.stdout, /kforge agent launch \[path\].*--agent <name>.*--agent <name>.*\[--exec\].*\[--json\]/);
   assert.match(result.stdout, /kforge agent finish \[path\].*--agent <name>.*\[--task-done\].*\[--json\]/);
@@ -342,6 +343,28 @@ test("cli agent plan assigns multiple agent runs", async () => {
     assert.equal(boardPayload.counts?.claimedTasks, 2);
     assert.equal(boardPayload.agents?.[0]?.agent, "cli-plan-a");
     assert.match(boardPayload.next?.join("\n") ?? "", /task list/);
+
+    const driftTask = payload.assignments?.[0]?.task?.file ?? "";
+    await writeFile(
+      path.join(repoPath, driftTask),
+      (await readFile(path.join(repoPath, driftTask), "utf8")).replace("Status: claimed", "Status: open").replace("Owner: cli-plan-a", "Owner: -"),
+      "utf8",
+    );
+    const reconcileDryRun = await runCli(["agent", "reconcile", repoPath, "--json"]);
+    const reconcileWrite = await runCli(["agent", "reconcile", repoPath, "--write", "--json"]);
+    const reconcilePayload = JSON.parse(reconcileWrite.stdout) as {
+      counts?: { actions?: number; applied?: number };
+      actions?: Array<{ action?: string; applied?: boolean }>;
+      board?: { counts?: { runsWithoutClaimedTask?: number } };
+    };
+
+    assert.equal(reconcileDryRun.exitCode, 0);
+    assert.match(reconcileDryRun.stdout, /claim_run_task/);
+    assert.equal(reconcileWrite.exitCode, 0);
+    assert.equal(reconcilePayload.counts?.actions, 1);
+    assert.equal(reconcilePayload.counts?.applied, 1);
+    assert.equal(reconcilePayload.actions?.[0]?.applied, true);
+    assert.equal(reconcilePayload.board?.counts?.runsWithoutClaimedTask, 0);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }

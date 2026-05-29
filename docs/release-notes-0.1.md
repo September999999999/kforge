@@ -45,6 +45,8 @@ Use this release if you want:
 - `kforge review content` attaches edited output back to a review.
 - `kforge review status` and `kforge review apply` gate accepted writes.
 - `kforge agent finish` closes the run and can mark the task done.
+- `kforge agent reconcile` dry-runs or repairs recoverable multi-agent board
+  drift.
 - The ten-minute walkthrough in `docs/examples.md` covers this full path.
 
 ### Ingest, Compile, And Filing

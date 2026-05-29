@@ -571,6 +571,12 @@ export interface AgentBoardOptions {
   json?: boolean;
 }
 
+export interface AgentReconcileOptions {
+  write?: boolean;
+  note?: string;
+  json?: boolean;
+}
+
 export interface AgentBoardAgent {
   agent: string;
   runningRuns: RunItem[];
@@ -662,6 +668,31 @@ export interface AgentBoardPayload {
   openTasks: TaskItem[];
   orphanClaimedTasks: TaskItem[];
   runsWithoutClaimedTask: RunItem[];
+  next: string[];
+}
+
+export type AgentReconcileActionType = "release_orphan_claim" | "claim_run_task" | "skip_missing_task" | "skip_done_task";
+
+export interface AgentReconcileAction {
+  action: AgentReconcileActionType;
+  task?: string;
+  run?: string;
+  agent?: string;
+  reason: string;
+  applied: boolean;
+}
+
+export interface AgentReconcilePayload {
+  ok: true;
+  updatedAt: string;
+  dryRun: boolean;
+  counts: {
+    actions: number;
+    applied: number;
+    skipped: number;
+  };
+  actions: AgentReconcileAction[];
+  board: AgentBoardPayload;
   next: string[];
 }
 
@@ -2544,57 +2575,7 @@ export function agentStatus(repoPath: string, options: AgentStatusOptions): Comm
 export function agentBoard(repoPath: string, options: AgentBoardOptions = {}): CommandResult {
   requireRepo(repoPath);
 
-  const tasks = taskItems(repoPath);
-  const runs = runItems(repoPath);
-  const runningRuns = runs.filter((run) => run.status === "running");
-  const claimedTasks = tasks.filter((task) => task.status === "claimed");
-  const agentNames = [...new Set([...runningRuns.map((run) => run.agent), ...claimedTasks.map((task) => task.owner ?? "")].filter(Boolean))].sort();
-  const agents: AgentBoardAgent[] = agentNames.map((agent) => {
-    const agentRuns = runningRuns.filter((run) => run.agent === agent);
-    const agentTasks = claimedTasks.filter((task) => task.owner === agent);
-    return {
-      agent,
-      runningRuns: agentRuns,
-      claimedTasks: agentTasks,
-      next: agentStatusNext(agent, agentRuns, agentTasks),
-    };
-  });
-  const runningTaskRefs = new Set(runningRuns.map((run) => run.task));
-  const orphanClaimedTasks = claimedTasks.filter((task) => !runningTaskRefs.has(task.file));
-  const claimedTaskRefs = new Set(claimedTasks.map((task) => task.file));
-  const runsWithoutClaimedTask = runningRuns.filter((run) => !claimedTaskRefs.has(run.task));
-  const openTasks = tasks.filter((task) => task.status === "open");
-
-  const payload: AgentBoardPayload = {
-    ok: true,
-    updatedAt: today(),
-    counts: {
-      agents: agents.length,
-      openTasks: openTasks.length,
-      claimedTasks: claimedTasks.length,
-      doneTasks: tasks.filter((task) => task.status === "done").length,
-      runningRuns: runningRuns.length,
-      successfulRuns: runs.filter((run) => run.status === "success").length,
-      failedRuns: runs.filter((run) => run.status === "failure").length,
-      orphanClaimedTasks: orphanClaimedTasks.length,
-      runsWithoutClaimedTask: runsWithoutClaimedTask.length,
-    },
-    agents,
-    openTasks,
-    orphanClaimedTasks,
-    runsWithoutClaimedTask,
-    next: [
-      ...(openTasks.length > 0 ? ["kforge agent plan . --agent <agent-a> --agent <agent-b> --json"] : []),
-      ...(orphanClaimedTasks.length > 0
-        ? orphanClaimedTasks.map((task) => `kforge run start . --task ${shellQuote(task.file)} --agent ${shellQuote(task.owner ?? "<agent>")} --json`)
-        : []),
-      ...(runsWithoutClaimedTask.length > 0
-        ? runsWithoutClaimedTask.map((run) => `kforge run inspect . --run ${shellQuote(run.file)} --json`)
-        : []),
-      "kforge task list . --status all --json",
-      "kforge run list . --status all --json",
-    ],
-  };
+  const payload = agentBoardPayload(repoPath);
 
   if (options.json) {
     return { ok: true, messages: [JSON.stringify(payload, null, 2)] };
@@ -2619,23 +2600,68 @@ export function agentBoard(repoPath: string, options: AgentBoardOptions = {}): C
     "",
     "## Agents",
     "",
-    ...(agents.length > 0
+    ...(payload.agents.length > 0
       ? [
           "| Agent | Running Runs | Claimed Tasks | Next |",
           "| --- | ---: | ---: | --- |",
-          ...agents.map((agent) => `| ${escapeTableCell(agent.agent)} | ${agent.runningRuns.length} | ${agent.claimedTasks.length} | \`${agent.next[0] ?? ""}\` |`),
+          ...payload.agents.map((agent) => `| ${escapeTableCell(agent.agent)} | ${agent.runningRuns.length} | ${agent.claimedTasks.length} | \`${agent.next[0] ?? ""}\` |`),
         ]
       : ["No active agents found."]),
     "",
     "## Open Tasks",
     "",
-    ...(openTasks.length > 0 ? openTasks.map((task) => `- \`${task.file}\` ${task.title}`) : ["No open tasks."]),
+    ...(payload.openTasks.length > 0 ? payload.openTasks.map((task) => `- \`${task.file}\` ${task.title}`) : ["No open tasks."]),
     "",
     "## Attention",
     "",
-    ...(orphanClaimedTasks.length > 0 ? ["Claimed tasks without running runs:", ...orphanClaimedTasks.map((task) => `- \`${task.file}\` owner: ${task.owner ?? "-"}`)] : []),
-    ...(runsWithoutClaimedTask.length > 0 ? ["Running runs whose task is not currently claimed:", ...runsWithoutClaimedTask.map((run) => `- \`${run.file}\` task: \`${run.task}\``)] : []),
-    ...(orphanClaimedTasks.length === 0 && runsWithoutClaimedTask.length === 0 ? ["No coordination issues found."] : []),
+    ...(payload.orphanClaimedTasks.length > 0
+      ? ["Claimed tasks without running runs:", ...payload.orphanClaimedTasks.map((task) => `- \`${task.file}\` owner: ${task.owner ?? "-"}`)]
+      : []),
+    ...(payload.runsWithoutClaimedTask.length > 0
+      ? ["Running runs whose task is not currently claimed:", ...payload.runsWithoutClaimedTask.map((run) => `- \`${run.file}\` task: \`${run.task}\``)]
+      : []),
+    ...(payload.orphanClaimedTasks.length === 0 && payload.runsWithoutClaimedTask.length === 0 ? ["No coordination issues found."] : []),
+    "",
+    "## Next",
+    "",
+    ...payload.next.map((command) => `- \`${command}\``),
+    "",
+  ];
+
+  return { ok: true, messages: [lines.join("\n")] };
+}
+
+export function agentReconcile(repoPath: string, options: AgentReconcileOptions = {}): CommandResult {
+  requireRepo(repoPath);
+
+  const payload = agentReconcilePayload(repoPath, options);
+  if (options.json) {
+    return { ok: true, messages: [JSON.stringify(payload, null, 2)] };
+  }
+
+  const lines = [
+    "# Agent Reconcile",
+    "",
+    `Updated: ${payload.updatedAt}`,
+    `Dry run: ${payload.dryRun ? "yes" : "no"}`,
+    "",
+    "## Counts",
+    "",
+    `- actions: ${payload.counts.actions}`,
+    `- applied: ${payload.counts.applied}`,
+    `- skipped: ${payload.counts.skipped}`,
+    "",
+    "## Actions",
+    "",
+    ...(payload.actions.length > 0
+      ? [
+          "| Action | Task | Run | Agent | Applied | Reason |",
+          "| --- | --- | --- | --- | --- | --- |",
+          ...payload.actions.map((action) =>
+            `| ${action.action} | ${action.task ? `\`${action.task}\`` : "-"} | ${action.run ? `\`${action.run}\`` : "-"} | ${escapeTableCell(action.agent ?? "-")} | ${action.applied ? "yes" : "no"} | ${escapeTableCell(action.reason)} |`,
+          ),
+        ]
+      : ["No coordination drift found."]),
     "",
     "## Next",
     "",
@@ -6873,6 +6899,169 @@ function agentStatusNext(agent: string, runningRuns: RunItem[], claimedTasks: Ta
   }
 
   return [`kforge agent next . --agent ${shellQuote(agent)} --json`, "kforge task list . --json", "kforge run list . --json"];
+}
+
+function agentBoardPayload(repoPath: string): AgentBoardPayload {
+  const tasks = taskItems(repoPath);
+  const runs = runItems(repoPath);
+  const runningRuns = runs.filter((run) => run.status === "running");
+  const claimedTasks = tasks.filter((task) => task.status === "claimed");
+  const agentNames = [...new Set([...runningRuns.map((run) => run.agent), ...claimedTasks.map((task) => task.owner ?? "")].filter(Boolean))].sort();
+  const agents: AgentBoardAgent[] = agentNames.map((agent) => {
+    const agentRuns = runningRuns.filter((run) => run.agent === agent);
+    const agentTasks = claimedTasks.filter((task) => task.owner === agent);
+    return {
+      agent,
+      runningRuns: agentRuns,
+      claimedTasks: agentTasks,
+      next: agentStatusNext(agent, agentRuns, agentTasks),
+    };
+  });
+  const runningTaskRefs = new Set(runningRuns.map((run) => run.task));
+  const orphanClaimedTasks = claimedTasks.filter((task) => !runningTaskRefs.has(task.file));
+  const claimedTaskRefs = new Set(claimedTasks.map((task) => task.file));
+  const runsWithoutClaimedTask = runningRuns.filter((run) => !claimedTaskRefs.has(run.task));
+  const openTasks = tasks.filter((task) => task.status === "open");
+
+  return {
+    ok: true,
+    updatedAt: today(),
+    counts: {
+      agents: agents.length,
+      openTasks: openTasks.length,
+      claimedTasks: claimedTasks.length,
+      doneTasks: tasks.filter((task) => task.status === "done").length,
+      runningRuns: runningRuns.length,
+      successfulRuns: runs.filter((run) => run.status === "success").length,
+      failedRuns: runs.filter((run) => run.status === "failure").length,
+      orphanClaimedTasks: orphanClaimedTasks.length,
+      runsWithoutClaimedTask: runsWithoutClaimedTask.length,
+    },
+    agents,
+    openTasks,
+    orphanClaimedTasks,
+    runsWithoutClaimedTask,
+    next: [
+      ...(openTasks.length > 0 ? ["kforge agent plan . --agent <agent-a> --agent <agent-b> --json"] : []),
+      ...(orphanClaimedTasks.length > 0
+        ? orphanClaimedTasks.map((task) => `kforge run start . --task ${shellQuote(task.file)} --agent ${shellQuote(task.owner ?? "<agent>")} --json`)
+        : []),
+      ...(runsWithoutClaimedTask.length > 0
+        ? runsWithoutClaimedTask.map((run) => `kforge run inspect . --run ${shellQuote(run.file)} --json`)
+        : []),
+      ...(orphanClaimedTasks.length > 0 || runsWithoutClaimedTask.length > 0 ? ["kforge agent reconcile . --write --json"] : []),
+      "kforge task list . --status all --json",
+      "kforge run list . --status all --json",
+    ],
+  };
+}
+
+function agentReconcilePayload(repoPath: string, options: AgentReconcileOptions): AgentReconcilePayload {
+  const before = agentBoardPayload(repoPath);
+  const write = Boolean(options.write);
+  const note = options.note?.trim();
+  const actions = agentReconcilePlan(repoPath, before);
+
+  if (write) {
+    for (const action of actions) {
+      if (action.action === "release_orphan_claim" && action.task) {
+        const result = releaseTask(repoPath, {
+          task: action.task,
+          note: note ?? "reconciled orphan claimed task without a running run",
+          json: true,
+        });
+        action.applied = result.ok;
+        if (!result.ok) {
+          action.reason = result.messages.join("; ");
+        }
+      }
+
+      if (action.action === "claim_run_task" && action.task && action.agent) {
+        const result = claimTask(repoPath, {
+          task: action.task,
+          agent: action.agent,
+          json: true,
+        });
+        action.applied = result.ok;
+        if (!result.ok) {
+          action.reason = result.messages.join("; ");
+        }
+      }
+    }
+  }
+
+  const applied = actions.filter((action) => action.applied).length;
+  const skipped = actions.length - applied;
+  return {
+    ok: true,
+    updatedAt: today(),
+    dryRun: !write,
+    counts: {
+      actions: actions.length,
+      applied,
+      skipped,
+    },
+    actions,
+    board: agentBoardPayload(repoPath),
+    next:
+      actions.length === 0
+        ? ["kforge agent board . --json", "kforge task list . --status all --json"]
+        : write
+          ? ["kforge agent board . --json", "kforge run list . --status all --json", "kforge task list . --status all --json"]
+          : ["kforge agent reconcile . --write --json", "kforge agent board . --json"],
+  };
+}
+
+function agentReconcilePlan(repoPath: string, board: AgentBoardPayload): AgentReconcileAction[] {
+  const actions: AgentReconcileAction[] = [];
+
+  for (const task of board.orphanClaimedTasks) {
+    actions.push({
+      action: "release_orphan_claim",
+      task: task.file,
+      agent: task.owner,
+      reason: "claimed task has no running run; releasing lets another agent claim it",
+      applied: false,
+    });
+  }
+
+  for (const run of board.runsWithoutClaimedTask) {
+    const task = readTaskItem(repoPath, run.task, "agent reconcile");
+    if (!task) {
+      actions.push({
+        action: "skip_missing_task",
+        run: run.file,
+        task: run.task,
+        agent: run.agent,
+        reason: "running run points to a missing task; inspect or finish the run manually",
+        applied: false,
+      });
+      continue;
+    }
+
+    if (task.status === "open") {
+      actions.push({
+        action: "claim_run_task",
+        run: run.file,
+        task: task.file,
+        agent: run.agent,
+        reason: "running run points to an open task; claiming it restores ownership",
+        applied: false,
+      });
+      continue;
+    }
+
+    actions.push({
+      action: "skip_done_task",
+      run: run.file,
+      task: task.file,
+      agent: run.agent,
+      reason: `running run points to a ${task.status} task; inspect or finish the run manually`,
+      applied: false,
+    });
+  }
+
+  return actions;
 }
 
 function agentStepReadRefs(run: RunItem | null, task: TaskItem | null): string[] {

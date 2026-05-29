@@ -11,6 +11,8 @@ tools to share.
 - `kforge source fetch-list`
 - `kforge source import`
 - source ingest JSON output for agent automation
+- Web dashboard health panel for doctor checks, trust score, claim audit, and
+  next actions
 - Web dashboard single-URL, pasted URL-list, and local-directory source ingest
   into `raw/`
 - `kforge source list`
@@ -115,6 +117,7 @@ Goal: make knowledge quality testable.
 
 - CI-friendly doctor checks
 - trust score command
+- Web dashboard health/lint panel
 - link integrity checks
 - provenance coverage score
 - review debt score

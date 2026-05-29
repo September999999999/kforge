@@ -1006,6 +1006,7 @@ function webDashboardHtml(): string {
       <div class="repo" id="repoPath">Loading repo</div>
       <nav>
         <a href="#overview">Overview</a>
+        <a href="#health">Health</a>
         <a href="#search">Search</a>
         <a href="#files">Files</a>
         <a href="#outputs">Outputs</a>
@@ -1030,6 +1031,10 @@ function webDashboardHtml(): string {
 
       <div class="layout">
         <div class="stack">
+          <section id="health">
+            <div class="section-head"><h2>Health</h2><span class="status" id="healthStatus">doctor</span></div>
+            <div class="section-body" id="healthPanel"><div class="empty">Loading health checks.</div></div>
+          </section>
           <section id="reviews">
             <div class="section-head"><h2>Review Queue</h2><span class="status" id="doctorStatus">doctor</span></div>
             <div class="section-body" id="reviewTable"></div>
@@ -1196,10 +1201,40 @@ function webDashboardHtml(): string {
       const doctorOk = data.doctor?.ok === true;
       $("doctorStatus").className = "status " + (doctorOk ? "ok" : "bad");
       $("doctorStatus").textContent = doctorOk ? "clean" : "needs review";
+      renderHealth(data);
       renderReviews(data.reviews);
       renderTasks(data.tasks);
       renderRuns(data.runs);
       renderAgents(data.agents);
+    }
+
+    function renderHealth(data) {
+      const doctorOk = data.doctor?.ok === true;
+      const health = data.dashboard?.health || {};
+      const messages = data.doctor?.messages || [];
+      $("healthStatus").className = "status " + (doctorOk ? "ok" : "bad");
+      $("healthStatus").textContent = doctorOk ? (messages.length ? "clean with notes" : "clean") : "needs review";
+      const next = data.dashboard?.next || [];
+      const summary = [
+        ["Doctor", doctorOk ? (messages.length ? "clean with notes" : "clean") : "needs attention"],
+        ["Trust", health.trustScore === undefined ? "n/a" : String(health.trustScore) + "/100"],
+        ["Claim audit", health.claimAudit || "-"],
+        ["Agent gaps", health.agentGaps ?? 0],
+      ];
+      const issueRows = messages.length
+        ? messages.map((message) => '<li><code>' + h(message) + '</code></li>').join("")
+        : '<li><code>no structural issues found</code></li>';
+      const nextRows = next.length
+        ? next.map((command) => '<li><code>' + h(command) + '</code></li>').join("")
+        : '<li><code>kforge workflow .</code></li>';
+      $("healthPanel").innerHTML =
+        '<div class="metrics">' +
+        summary.map(([label, value]) => '<div class="metric"><strong>' + h(value) + '</strong><span>' + h(label) + '</span></div>').join("") +
+        '</div>' +
+        '<div class="viewer-grid">' +
+        '<div><h3>Doctor Checks</h3><ul>' + issueRows + '</ul></div>' +
+        '<div><h3>Next Actions</h3><ul>' + nextRows + '</ul></div>' +
+        '</div>';
     }
 
     function renderFiles(files) {

@@ -66,15 +66,16 @@ For a browser-based local control surface, run:
 kforge web .
 ```
 
-The web dashboard listens on `127.0.0.1` by default and shows repo health, file
-navigation, review queue, task queue, runs, active agents, safe review file
-previews, and safe actions for saving Proposed Content, accepting or rejecting
-reviews, previewing review apply as a dry run, explicitly applying accepted
-reviews, previewing or applying recoverable agent reconcile, refresh, bootstrap,
-single-URL, pasted URL-list, and local-directory source ingest, local search
-with open-in-preview results, answer-pack writing, compile-review
-draft-and-attach, output promotion into reviews, planning multi-agent runs, and
-writing agent launch scripts.
+The web dashboard listens on `127.0.0.1` by default and shows repo health with
+doctor checks, trust score, claim audit, and next actions, plus file navigation,
+review queue, task queue, runs, active agents, safe review file previews, and
+safe actions for saving Proposed Content, accepting or rejecting reviews,
+previewing review apply as a dry run, explicitly applying accepted reviews,
+previewing or applying recoverable agent reconcile, refresh, bootstrap,
+single-URL, pasted URL-list, and local-directory source ingest, local search with
+open-in-preview results, answer-pack writing, compile-review draft-and-attach,
+output promotion into reviews, planning multi-agent runs, and writing agent
+launch scripts.
 
 Create a compact handoff packet:
 

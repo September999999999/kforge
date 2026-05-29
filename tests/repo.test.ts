@@ -413,7 +413,12 @@ test("web dashboard serves repo state and safe actions", async () => {
       };
       const state = (await fetchJson(`${handle.url}/api/state`)) as {
         ok?: boolean;
-        dashboard?: { counts?: { rawSources?: number; reviews?: number } };
+        dashboard?: {
+          counts?: { rawSources?: number; reviews?: number };
+          health?: { doctor?: string; trustScore?: number; claimAudit?: string; agentGaps?: number };
+          next?: string[];
+        };
+        doctor?: { ok?: boolean; status?: string; messages?: string[] };
         reviews?: { total?: number; items?: { file?: string }[] };
         tasks?: { total?: number };
       };
@@ -638,6 +643,8 @@ test("web dashboard serves repo state and safe actions", async () => {
       };
 
       assert.match(html, /Knowledge Repo Dashboard/);
+      assert.match(html, /id="health"/);
+      assert.match(html, /healthPanel/);
       assert.match(html, /File Preview/);
       assert.match(html, /Files/);
       assert.match(html, /sourceFetchListForm/);
@@ -650,6 +657,14 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(state.ok, true);
       assert.equal(state.dashboard?.counts?.rawSources, 1);
       assert.equal(state.dashboard?.counts?.reviews, 2);
+      assert.equal(state.dashboard?.health?.doctor, "clean");
+      assert.equal(typeof state.dashboard?.health?.trustScore, "number");
+      assert.equal(state.dashboard?.health?.claimAudit, "clean");
+      assert.equal(state.dashboard?.health?.agentGaps, 0);
+      assert.equal(state.doctor?.ok, true);
+      assert.equal(state.doctor?.status, "clean");
+      assert.equal(state.doctor?.messages?.some((message) => message.includes("wiki pages without a sources field")), true);
+      assert.equal(state.dashboard?.next?.some((command) => command.startsWith("kforge ")), true);
       assert.equal(state.reviews?.total, 2);
       assert.equal(state.tasks?.total, 0);
       assert.equal(filePreview.ok, true);

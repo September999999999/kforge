@@ -259,10 +259,11 @@ lightweight command-palette contract that Obsidian shell-command helpers, future
 plugins, or local agents can read without needing a hosted service.
 
 `kforge web` runs a local browser dashboard over the same deterministic repo
-operations. It binds to `127.0.0.1` by default and serves a status view plus a
-file navigator for canonical repo directories. It can preview repo files through
-the same inspect path checks as the CLI. Its write actions intentionally stay
-narrow: save structured Proposed Content, accept or reject review artifacts,
+operations. It binds to `127.0.0.1` by default and serves a health panel with
+doctor messages, trust score, claim audit status, agent gaps, and next actions,
+plus a file navigator for canonical repo directories. It can preview repo files
+through the same inspect path checks as the CLI. Its write actions intentionally
+stay narrow: save structured Proposed Content, accept or reject review artifacts,
 preview review apply as a dry run, explicitly apply accepted review content,
 create compile-review draft outputs and attach them back to reviews, fetch URL
 sources, pasted URL lists, or local directories into `raw/`, refresh derived

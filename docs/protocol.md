@@ -600,7 +600,8 @@ With `--write`, the launcher is saved under `runs/`; with `--exec`, it is saved
 and run immediately.
 The Web dashboard mirrors this: Plan Runs assigns workers, auto-fills the
 launcher form, and can reuse those existing planned runs when writing the
-launcher script.
+launcher script. The result links each worker's task, run, and pre-created log
+file back into the Web file preview.
 `agent finish` closes the current run for an agent and can mark the linked task
 done with `--task-done`.
 `run next` remains available as the lower-level task/run command.

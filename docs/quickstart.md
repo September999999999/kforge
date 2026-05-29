@@ -306,7 +306,8 @@ The command template can use `{agent}`, `{task}`, `{run}`, `{prompt}`, `{log}`,
 and `{repo}`. Add `--exec` to run the generated shell launcher immediately.
 The Web dashboard has the same two-step flow: Plan Runs assigns distinct
 workers, then "Reuse existing planned runs" writes a launcher for that exact
-batch.
+batch. The launcher result links each worker's task, run, and pre-created log
+file back into the Web file preview.
 
 Check the shared board when several agents are active:
 

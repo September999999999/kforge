@@ -405,7 +405,8 @@ template, starts each worker in the background, and writes one log per worker.
 Add `--exec` when you want `kforge` to run the generated launcher immediately.
 In the Web dashboard, Plan Runs fills the launcher form with the assigned
 agents; enable "Reuse existing planned runs" to write a launcher for that exact
-batch instead of planning new work.
+batch instead of planning new work. The launcher result links each worker's
+task, run, and pre-created log file back into the Web file preview.
 
 Edit the generated `outputs/...-draft.md`, then attach it to the review:
 

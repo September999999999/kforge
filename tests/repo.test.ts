@@ -657,6 +657,8 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.match(html, /Files/);
       assert.match(html, /sourceFetchListForm/);
       assert.match(html, /sourceImportForm/);
+      assert.match(html, /data-open-file/);
+      assert.match(html, /launchResult/);
       assert.equal(files.ok, true);
       assert.equal(files.items?.some((item) => item.file === "raw/source.md" && item.scope === "raw"), true);
       assert.equal(files.items?.some((item) => item.file === "wiki/Existing.md" && item.scope === "wiki"), true);
@@ -804,6 +806,9 @@ test("web dashboard serves repo state and safe actions", async () => {
         plan.payload?.assignments.map((item) => item.run.file),
       );
       assert.match(await readFile(path.join(repoPath, plannedLaunch.payload?.script?.file ?? ""), "utf8"), /reuse-web-plan-a/);
+      assert.match(plannedLaunch.payload?.items?.[0]?.log ?? "", /^runs\/.+launch-web-plan-a.*\.log$/);
+      assert.equal((await fetchJson(`${handle.url}/api/file?path=${encodeURIComponent(plannedLaunch.payload?.items?.[0]?.run.file ?? "")}`) as { ok?: boolean }).ok, true);
+      assert.equal((await fetchJson(`${handle.url}/api/file?path=${encodeURIComponent(plannedLaunch.payload?.items?.[0]?.log ?? "")}`) as { ok?: boolean }).ok, true);
       assert.match(plan.payload?.assignments[0]?.run.file ?? "", /^runs\/.+web-plan-a\.md$/);
       assert.match(plan.payload?.assignments[1]?.task.file ?? "", /^tasks\/.+\.md$/);
 
@@ -1870,6 +1875,7 @@ test("agent launch prepares a parallel worker script", async () => {
     assert.match(payload.items[0]?.prompt ?? "", /kforge agent step/);
     assert.match(payload.items[0]?.log ?? "", /^runs\/.+launch-launch-a.*\.log$/);
     assert.match(await readFile(path.join(repoPath, payload.script.file ?? ""), "utf8"), /kforge agent launch/);
+    assert.equal(await readFile(path.join(repoPath, payload.items[0]?.log ?? ""), "utf8"), "");
 
     const runs = JSON.parse(listRuns(repoPath, { status: "all", json: true }).messages[0]) as RunListPayload;
     assert.equal(runs.total, 2);

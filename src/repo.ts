@@ -2908,6 +2908,7 @@ export function agentLaunch(repoPath: string, options: AgentLaunchOptions): Comm
   let scriptFile: string | undefined;
 
   if (options.write || options.exec) {
+    ensureAgentLaunchLogFiles(repoPath, items);
     scriptFile = writeAgentLaunchScript(repoPath, scriptContent);
   }
 
@@ -6983,6 +6984,16 @@ function nextAvailableAgentLaunchLogPath(repoPath: string, agent: string): strin
     counter += 1;
   }
   return toRepoPath(repoPath, candidate);
+}
+
+function ensureAgentLaunchLogFiles(repoPath: string, items: AgentLaunchItem[]): void {
+  for (const item of items) {
+    const logPath = path.resolve(repoPath, item.log);
+    mkdirSyncish(path.dirname(logPath));
+    if (!exists(logPath)) {
+      writeFileSyncish(logPath, "");
+    }
+  }
 }
 
 function writeAgentLaunchScript(repoPath: string, content: string): string {

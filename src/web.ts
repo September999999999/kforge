@@ -1580,9 +1580,10 @@ function webDashboardHtml(): string {
         $("runTable").innerHTML = '<div class="empty">No runs.</div>';
         return;
       }
-      $("runTable").innerHTML = '<table><thead><tr><th>Run</th><th>Status</th><th>Agent</th><th>Logs</th></tr></thead><tbody>' +
-        items.map((item) => '<tr><td><code>' + h(item.file) + '</code><br>' + h(item.title) + '</td><td>' + badge(item.status) + '</td><td>' + h(item.agent) + '</td><td>' + h(item.logCount) + '</td></tr>').join("") +
+      $("runTable").innerHTML = '<table><thead><tr><th>Run</th><th>Status</th><th>Agent</th><th>Logs</th><th></th></tr></thead><tbody>' +
+        items.map((item) => '<tr><td><code>' + h(item.file) + '</code><br>' + h(item.title) + '</td><td>' + badge(item.status) + '</td><td>' + h(item.agent) + '</td><td>' + h(item.logCount) + '</td><td><button class="button small" type="button" data-open-file="' + h(item.file) + '">Open</button></td></tr>').join("") +
         '</tbody></table>';
+      bindFileOpenButtons();
     }
 
     function renderAgents(agents) {
@@ -1677,13 +1678,14 @@ function webDashboardHtml(): string {
       const items = payload?.items || [];
       const rows = items.length
         ? '<table><thead><tr><th>Agent</th><th>Task</th><th>Run</th><th>Log</th></tr></thead><tbody>' +
-          items.map((item) => '<tr><td>' + h(item.agent) + '</td><td><code>' + h(item.task?.file || "-") + '</code></td><td><code>' + h(item.run?.file || "-") + '</code></td><td><code>' + h(item.log || "-") + '</code></td></tr>').join("") +
+          items.map((item) => '<tr><td>' + h(item.agent) + '</td><td><button class="button small" type="button" data-open-file="' + h(item.task?.file || "") + '">' + h(item.task?.file || "-") + '</button></td><td><button class="button small" type="button" data-open-file="' + h(item.run?.file || "") + '">' + h(item.run?.file || "-") + '</button></td><td><button class="button small" type="button" data-open-file="' + h(item.log || "") + '">' + h(item.log || "-") + '</button></td></tr>').join("") +
           '</tbody></table>'
         : '<div class="empty">No launcher workers prepared.</div>';
       $("launchResult").innerHTML =
         '<div class="viewer-meta"><span class="status ok">' + h(payload?.source || "launcher") + '</span><span>' +
         h(items.length) + ' worker(s)</span><code>' + h(payload?.script?.file || "not written") + '</code></div>' +
         rows;
+      bindFileOpenButtons();
     }
 
     function renderFetchListResult(payload) {

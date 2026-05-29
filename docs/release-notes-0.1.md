@@ -49,6 +49,19 @@ Use this release if you want:
   drift.
 - The ten-minute walkthrough in `docs/examples.md` covers this full path.
 
+### Local Web Workbench
+
+- `kforge web` opens a localhost dashboard for repo health, trust score, claim
+  audit, review queue, task queue, runs, active agents, file previews, search,
+  answer packs, compile-review drafts, and output promotion.
+- The dashboard can ingest a single URL, pasted URL list, or local directory
+  into `raw/`.
+- Safe Web actions can save Proposed Content, accept or reject reviews,
+  dry-run and apply accepted reviews, preview or apply agent reconcile, refresh
+  indexes, bootstrap review-first work, plan multi-agent runs, write launcher
+  scripts, log runs, finish runs as success or failure, mark linked tasks done
+  on success, and release claimed tasks back to the queue.
+
 ### Ingest, Compile, And Filing
 
 - `kforge source add` and `kforge source import` copy local source material into

@@ -38,6 +38,8 @@ const requiredReleaseNotesPhrases = [
   "not a RAG framework",
   "## What Ships",
   "### Agent Draft Loop",
+  "### Local Web Workbench",
+  "release claimed tasks back to the queue",
   "### Release Guards",
   "npm run check:release",
   "## Known Boundaries",

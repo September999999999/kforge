@@ -50,6 +50,7 @@ import {
   logRun,
   nextRun,
   nextTask,
+  obsidianRepo,
   packRepo,
   printAgentTemplate,
   promoteOutput,
@@ -133,6 +134,7 @@ test("init with example creates a usable demo repo", async () => {
     assert.match(await readFile(path.join(repoPath, "indexes", "source-inventory.md"), "utf8"), /llm-knowledge-bases/);
     assert.match(await readFile(path.join(repoPath, "indexes", "context.md"), "utf8"), /# Agent Context/);
     assert.match(await readFile(path.join(repoPath, "indexes", "dashboard.md"), "utf8"), /# Knowledge Dashboard/);
+    assert.match(await readFile(path.join(repoPath, "indexes", "obsidian.md"), "utf8"), /# kforge Obsidian Home/);
     assert.match(await readFile(path.join(repoPath, "indexes", "workflow.md"), "utf8"), /# Agent Workflow Runbook/);
     assert.match(await readFile(path.join(repoPath, "indexes", "doctor.md"), "utf8"), /Status: clean/);
     assert.match(await readFile(path.join(repoPath, "indexes", "score.md"), "utf8"), /# Trust Score/);
@@ -235,6 +237,7 @@ test("refresh writes indexes and derived reports", async () => {
     await assertFileExists(path.join(repoPath, "indexes", "compile-plan.md"));
     await assertFileExists(path.join(repoPath, "indexes", "context.md"));
     await assertFileExists(path.join(repoPath, "indexes", "dashboard.md"));
+    await assertFileExists(path.join(repoPath, "indexes", "obsidian.md"));
     await assertFileExists(path.join(repoPath, "indexes", "workflow.md"));
     await assertFileExists(path.join(repoPath, "indexes", "claim-audit.md"));
     await assertFileExists(path.join(repoPath, "indexes", "doctor.md"));
@@ -242,6 +245,7 @@ test("refresh writes indexes and derived reports", async () => {
     assert.match(await readFile(path.join(repoPath, "indexes", "claim-audit.md"), "utf8"), /# Claim Audit/);
     assert.match(await readFile(path.join(repoPath, "indexes", "compile-plan.md"), "utf8"), /# Compile Plan/);
     assert.match(await readFile(path.join(repoPath, "indexes", "dashboard.md"), "utf8"), /# Knowledge Dashboard/);
+    assert.match(await readFile(path.join(repoPath, "indexes", "obsidian.md"), "utf8"), /# kforge Obsidian Home/);
     assert.match(await readFile(path.join(repoPath, "indexes", "doctor.md"), "utf8"), /Status: clean/);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
@@ -305,6 +309,29 @@ test("dashboard prints and writes an Obsidian-friendly status entrypoint", async
     assert.equal(written.ok, true);
     assert.match(written.messages[0], /indexes\/dashboard.md/);
     assert.match(await readFile(path.join(repoPath, "indexes", "dashboard.md"), "utf8"), /# Knowledge Dashboard/);
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+});
+
+test("obsidian prints and writes a vault entry note", async () => {
+  const repoPath = await tempRepoPath();
+  try {
+    initRepo(repoPath, { example: true });
+
+    const printed = obsidianRepo(repoPath);
+    const written = obsidianRepo(repoPath, { write: true });
+    const content = await readFile(path.join(repoPath, "indexes", "obsidian.md"), "utf8");
+
+    assert.equal(printed.ok, true);
+    assert.match(printed.messages[0], /# kforge Obsidian Home/);
+    assert.match(printed.messages[0], /\[Dashboard\]\(\.\.\/indexes\/dashboard\.md\)/);
+    assert.match(printed.messages[0], /kforge web \./);
+    assert.equal(written.ok, true);
+    assert.match(written.messages[0], /indexes\/obsidian.md/);
+    assert.match(content, /## Start Here/);
+    assert.match(content, /\[Workflow runbook\]\(\.\.\/indexes\/workflow\.md\)/);
+    assert.match(content, /\[Wiki home\]\(\.\.\/wiki\/Home\.md\)/);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }

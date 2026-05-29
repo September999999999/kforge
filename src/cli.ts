@@ -44,6 +44,7 @@ import {
   listAgentTemplates,
   listOutputs,
   listSources,
+  obsidianRepo,
   inspectRun,
   listRuns,
   logRun,
@@ -86,6 +87,7 @@ type Command =
   | "score"
   | "context"
   | "dashboard"
+  | "obsidian"
   | "handoff"
   | "workflow"
   | "graph"
@@ -221,6 +223,10 @@ function runRepoCommand(
 
   if (command === "dashboard") {
     return dashboardRepo(repoPath, { write, json });
+  }
+
+  if (command === "obsidian") {
+    return obsidianRepo(repoPath, { write });
   }
 
   if (command === "handoff") {
@@ -1062,6 +1068,7 @@ function isCommand(value: string): value is Command {
     value === "score" ||
     value === "context" ||
     value === "dashboard" ||
+    value === "obsidian" ||
     value === "handoff" ||
     value === "workflow" ||
     value === "graph" ||
@@ -1097,6 +1104,7 @@ Usage:
   kforge score [path] [--write]                        print or write a trust score report
   kforge context [path] [--write]                      print or write an agent context pack
   kforge dashboard [path] [--write] [--json]           print or write an Obsidian-friendly status dashboard
+  kforge obsidian [path] [--write]                     print or write an Obsidian vault entry note
   kforge handoff [path] [--write]                      print or write an agent handoff packet
   kforge workflow [path] [--write]                     print or write an agent workflow runbook
   kforge graph [path] [--write]                        print or write wiki backlinks and orphan report

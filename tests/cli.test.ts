@@ -22,6 +22,7 @@ test("cli help exposes the public command surface", async () => {
   assert.match(result.stdout, /kforge handoff \[path\] \[--write\]/);
   assert.match(result.stdout, /kforge workflow \[path\] \[--write\]/);
   assert.match(result.stdout, /kforge dashboard \[path\] \[--write\] \[--json\]/);
+  assert.match(result.stdout, /kforge obsidian \[path\] \[--write\]/);
   assert.match(result.stdout, /kforge web \[path\] \[--host <host>\] \[--port <n>\]/);
   assert.match(result.stdout, /kforge agent next \[path\].*--agent <name>.*\[--json\]/);
   assert.match(result.stdout, /kforge agent step \[path\].*--agent <name>.*\[--json\]/);
@@ -69,6 +70,8 @@ test("cli can run the documented demo workflow", async () => {
     const dashboard = await runCli(["dashboard", repoPath]);
     const dashboardJson = await runCli(["dashboard", repoPath, "--json"]);
     const dashboardWriteJson = await runCli(["dashboard", repoPath, "--write", "--json"]);
+    const obsidian = await runCli(["obsidian", repoPath]);
+    const obsidianWrite = await runCli(["obsidian", repoPath, "--write"]);
     const handoff = await runCli(["handoff", repoPath]);
     const reviewQueue = await runCli(["review", "queue", repoPath]);
     const reviewQueueJson = await runCli(["review", "queue", repoPath, "--json"]);
@@ -95,6 +98,12 @@ test("cli can run the documented demo workflow", async () => {
     assert.equal(dashboardWriteJson.exitCode, 0);
     assert.equal(JSON.parse(dashboardWriteJson.stdout).health.doctor, "clean");
     assert.match(await readFile(path.join(repoPath, "indexes", "dashboard.md"), "utf8"), /# Knowledge Dashboard/);
+    assert.equal(obsidian.exitCode, 0);
+    assert.match(obsidian.stdout, /# kforge Obsidian Home/);
+    assert.match(obsidian.stdout, /kforge web \./);
+    assert.equal(obsidianWrite.exitCode, 0);
+    assert.match(obsidianWrite.stdout, /indexes\/obsidian.md/);
+    assert.match(await readFile(path.join(repoPath, "indexes", "obsidian.md"), "utf8"), /\[Dashboard\]\(\.\.\/indexes\/dashboard\.md\)/);
     assert.equal(handoff.exitCode, 0);
     assert.match(handoff.stdout, /# Agent Handoff/);
     assert.equal(reviewQueue.exitCode, 0);

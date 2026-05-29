@@ -44,6 +44,7 @@ test("mcp server exposes kforge tools over stdio", async () => {
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_source_inspect"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_context"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_dashboard"), true);
+    assert.equal(tools.tools.some((tool) => tool.name === "kforge_obsidian"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_graph"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_handoff"), true);
     assert.equal(tools.tools.some((tool) => tool.name === "kforge_workflow"), true);
@@ -103,6 +104,15 @@ test("mcp server exposes kforge tools over stdio", async () => {
     });
     assert.equal(JSON.parse(firstText(dashboardJson.content)).counts.rawSources, 1);
     assert.match(await readFile(path.join(repoPath, "indexes", "dashboard.md"), "utf8"), /# Knowledge Dashboard/);
+
+    const obsidian = await client.callTool({
+      name: "kforge_obsidian",
+      arguments: {
+        write: true,
+      },
+    });
+    assert.match(firstText(obsidian.content), /indexes\/obsidian.md/);
+    assert.match(await readFile(path.join(repoPath, "indexes", "obsidian.md"), "utf8"), /# kforge Obsidian Home/);
 
     const demo = await client.callTool({
       name: "kforge_demo",

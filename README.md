@@ -457,6 +457,12 @@ Or save the workflow runbook into `indexes/`:
 kforge workflow ~/research/my-topic --write
 ```
 
+Write an Obsidian vault home note:
+
+```bash
+kforge obsidian ~/research/my-topic --write
+```
+
 Open the local web dashboard:
 
 ```bash
@@ -576,6 +582,8 @@ kforge context [path] [--write]
                          print or write an agent context pack
 kforge dashboard [path] [--write] [--json]
                          print or write an Obsidian-friendly status dashboard
+kforge obsidian [path] [--write]
+                         print or write an Obsidian vault entry note
 kforge handoff [path] [--write]
                          print or write an agent handoff packet
 kforge workflow [path] [--write]

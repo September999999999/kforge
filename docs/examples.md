@@ -196,7 +196,7 @@ runs/        auditable local-agent run log
 outputs/     editable provenance draft
 reviews/     Proposed Content accepted and applied
 wiki/        applied Provenance page
-indexes/     refreshed maps, workflow, health, and score reports
+indexes/     refreshed maps, Obsidian entry, workflow, health, and score reports
 ```
 
 That is the core product bet: useful agent work accumulates as plain Markdown

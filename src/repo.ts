@@ -37,6 +37,10 @@ export interface DashboardOptions {
   json?: boolean;
 }
 
+export interface ObsidianOptions {
+  write?: boolean;
+}
+
 export interface GraphOptions {
   write?: boolean;
 }
@@ -253,6 +257,19 @@ export interface DashboardPayload {
   };
   next: string[];
   links: Array<{ label: string; file: string }>;
+}
+
+export interface ObsidianPayload {
+  ok: true;
+  updatedAt: string;
+  vaultEntry: string;
+  counts: DashboardPayload["counts"];
+  health: DashboardPayload["health"];
+  sections: Array<{
+    label: string;
+    links: Array<{ label: string; file: string }>;
+  }>;
+  commands: string[];
 }
 
 export interface BootstrapPayload {
@@ -1056,6 +1073,7 @@ export function refreshRepo(repoPath: string): CommandResult {
     ["compile-plan", compilePlanRepo(repoPath, { write: true })] as const,
     ["context", contextRepo(repoPath, { write: true })] as const,
     ["dashboard", dashboardRepo(repoPath, { write: true })] as const,
+    ["obsidian", obsidianRepo(repoPath, { write: true })] as const,
     ["workflow", workflowRepo(repoPath, { write: true })] as const,
     ["claim-audit", auditClaims(repoPath, { write: true })] as const,
     ["doctor", doctorRepo(repoPath, { write: true })] as const,
@@ -1153,6 +1171,20 @@ export function dashboardRepo(repoPath: string, options: DashboardOptions = {}):
 
   if (options.json) {
     return { ok: true, messages: [JSON.stringify(payload, null, 2)] };
+  }
+
+  return { ok: true, messages: [content] };
+}
+
+export function obsidianRepo(repoPath: string, options: ObsidianOptions = {}): CommandResult {
+  requireRepo(repoPath);
+
+  const content = obsidianEntry(repoPath);
+  if (options.write) {
+    const target = path.join(repoPath, "indexes", "obsidian.md");
+    mkdirSyncish(path.dirname(target));
+    writeFileSyncish(target, content);
+    return { ok: true, messages: [`Updated ${toRepoPath(repoPath, target)}`] };
   }
 
   return { ok: true, messages: [content] };
@@ -4087,6 +4119,105 @@ function dashboardReport(payload: DashboardPayload): string {
   return lines.join("\n");
 }
 
+function obsidianEntry(repoPath: string): string {
+  const payload = obsidianPayload(repoPath);
+  const lines = [
+    GENERATED_HEADER,
+    "# kforge Obsidian Home",
+    "",
+    `Updated: ${payload.updatedAt}`,
+    "",
+    "## Repo Snapshot",
+    "",
+    `- raw sources: ${payload.counts.rawSources}`,
+    `- wiki pages: ${payload.counts.wikiPages}`,
+    `- claims: ${payload.counts.claims}`,
+    `- reviews: ${payload.counts.reviews}`,
+    `- outputs: ${payload.counts.outputs}`,
+    `- open reviews: ${payload.counts.openReviews}`,
+    `- open tasks: ${payload.counts.openTasks}`,
+    `- running runs: ${payload.counts.runningRuns}`,
+    `- doctor: ${payload.health.doctor}`,
+    `- trust score: ${payload.health.trustScore === undefined ? "n/a" : `${payload.health.trustScore}/100`}`,
+    `- claim audit: ${payload.health.claimAudit}`,
+    `- agent coordination gaps: ${payload.health.agentGaps}`,
+    "",
+    ...payload.sections.flatMap((section) => [
+      `## ${section.label}`,
+      "",
+      ...section.links.map((link) => `- [${link.label}](../${link.file})`),
+      "",
+    ]),
+    "## Local Workbench",
+    "",
+    "```bash",
+    ...payload.commands,
+    "```",
+    "",
+  ];
+
+  return lines.join("\n");
+}
+
+function obsidianPayload(repoPath: string): ObsidianPayload {
+  const dashboard = dashboardPayload(repoPath);
+  const outputFiles = iterFiles(path.join(repoPath, "outputs"));
+  const sampleOutput = firstRepoRef(repoPath, outputFiles);
+  const sections = [
+    {
+      label: "Start Here",
+      links: [
+        { label: "Dashboard", file: "indexes/dashboard.md" },
+        { label: "Agent context", file: "indexes/context.md" },
+        { label: "Workflow runbook", file: "indexes/workflow.md" },
+        { label: "Doctor", file: "indexes/doctor.md" },
+        { label: "Trust score", file: "indexes/score.md" },
+      ],
+    },
+    {
+      label: "Maps And Queues",
+      links: [
+        { label: "Source inventory", file: "indexes/source-inventory.md" },
+        { label: "Wiki map", file: "indexes/wiki-map.md" },
+        { label: "Wiki graph", file: "indexes/backlinks.md" },
+        { label: "Compile plan", file: "indexes/compile-plan.md" },
+        { label: "Review index", file: "indexes/review-index.md" },
+        { label: "Claim index", file: "indexes/claim-index.md" },
+        { label: "Claim audit", file: "indexes/claim-audit.md" },
+      ],
+    },
+    {
+      label: "Knowledge Surfaces",
+      links: [
+        { label: "Wiki home", file: "wiki/Home.md" },
+        { label: "Raw sources", file: "raw/" },
+        { label: "Reviews", file: "reviews/" },
+        { label: "Outputs", file: "outputs/" },
+        { label: "Tasks", file: "tasks/" },
+        { label: "Runs", file: "runs/" },
+        ...(sampleOutput ? [{ label: "Latest output", file: sampleOutput }] : []),
+      ],
+    },
+  ];
+
+  return {
+    ok: true,
+    updatedAt: dashboard.updatedAt,
+    vaultEntry: "indexes/obsidian.md",
+    counts: dashboard.counts,
+    health: dashboard.health,
+    sections,
+    commands: uniqueStrings([
+      "kforge refresh .",
+      "kforge web .",
+      "kforge workflow .",
+      "kforge review queue . --json",
+      "kforge agent board . --json",
+      ...dashboard.next,
+    ]),
+  };
+}
+
 function dashboardNextCommands(input: {
   doctorOk: boolean;
   openReviews: number;
@@ -4830,6 +4961,10 @@ function workflowNextMove(
 
 function firstRepoRef(repoPath: string, files: string[]): string | undefined {
   return files[0] ? toRepoPath(repoPath, files[0]) : undefined;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
 }
 
 function shellQuote(value: string): string {

@@ -49,9 +49,14 @@ context, workflow, doctor, and score reports.
 Start with the dashboard and agent context:
 
 ```bash
+kforge obsidian .
 kforge dashboard .
 kforge context .
 ```
+
+`kforge obsidian . --write` writes `indexes/obsidian.md`, a vault home note
+that links the dashboard, workflow, generated indexes, reviews, outputs, tasks,
+and runs.
 
 For a browser-based local control surface, run:
 

@@ -235,6 +235,7 @@ humans usually read first:
 - `indexes/review-index.md`
 - `indexes/context.md`
 - `indexes/dashboard.md`
+- `indexes/obsidian.md`
 - `indexes/workflow.md`
 - `indexes/doctor.md`
 - `indexes/score.md`
@@ -245,6 +246,11 @@ It does not call an LLM provider and does not rewrite `raw/`, `wiki/`,
 `kforge dashboard --write` can also be run directly. It writes an
 Obsidian-friendly `indexes/dashboard.md` entry point with health, work queue,
 agent board, and index links.
+
+`kforge obsidian --write` writes `indexes/obsidian.md`, a vault home note for
+people opening the repo in Obsidian. It links the dashboard, workflow, indexes,
+wiki home, reviews, outputs, tasks, and runs, and includes the local workbench
+commands an agent or human should reach for first.
 
 `kforge web` runs a local browser dashboard over the same deterministic repo
 operations. It binds to `127.0.0.1` by default and serves a status view plus a

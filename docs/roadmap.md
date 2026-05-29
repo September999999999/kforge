@@ -96,6 +96,7 @@ Goal: make the protocol usable from common AI and PKM environments.
   state, JSON output, and MCP tools
 - high-level agent draft loop with `agent next`, `agent step`, `agent draft`,
   review writeback, accepted apply, and finish smoke coverage
+- Obsidian vault entry note through `kforge obsidian`
 - Obsidian helper plugin or command palette bridge
 - local search service
 - optional Rust search/index acceleration only if profiling shows it is needed

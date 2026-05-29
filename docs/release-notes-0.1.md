@@ -34,7 +34,8 @@ Use this release if you want:
   and `runs/`.
 - `kb.yaml` protocol manifest validation.
 - Demo repo generation with refreshed indexes and derived reports.
-- Obsidian-friendly Markdown files throughout the durable state.
+- Obsidian-friendly Markdown files throughout the durable state, including an
+  `indexes/obsidian.md` vault entry note.
 
 ### Agent Draft Loop
 

@@ -53,6 +53,7 @@ import {
   logRun,
   nextRun,
   nextTask,
+  obsidianRepo,
   packRepo,
   printAgentTemplate,
   promoteOutput,
@@ -358,6 +359,20 @@ export function createKforgeMcpServer(options: McpOptions = {}): McpServer {
     },
     async ({ path: repoPath, write, json }) =>
       runAsTool(() => dashboardRepo(toolRepoPath(defaultRepoPath, repoPath), { write, json })),
+  );
+
+  server.registerTool(
+    "kforge_obsidian",
+    {
+      title: "Read Obsidian entry",
+      description: "Return or write an Obsidian vault entry note linking dashboard, workflow, indexes, reviews, outputs, tasks, and runs.",
+      inputSchema: z.object({
+        path: repoPathSchema,
+        write: z.boolean().optional(),
+      }),
+    },
+    async ({ path: repoPath, write }) =>
+      runAsTool(() => obsidianRepo(toolRepoPath(defaultRepoPath, repoPath), { write })),
   );
 
   server.registerTool(

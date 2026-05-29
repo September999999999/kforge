@@ -35,7 +35,8 @@ accepts a `path` argument when an agent needs to operate on a different repo.
 - `kforge_bootstrap`: stage queued raw sources into compile reviews, refresh
   deterministic repo status, seed tasks, and optionally start auditable agent
   runs; it does not write compiled wiki pages directly
-- `kforge_refresh`: regenerate indexes and write context, workflow, doctor, and score reports
+- `kforge_refresh`: regenerate indexes and write context, dashboard,
+  Obsidian entry, workflow, doctor, and score reports
 - `kforge_source_add`: copy a local source into `raw/` with metadata; pass
   `json: true` for the same machine-readable ingest payload as
   `kforge source add --json`
@@ -50,6 +51,8 @@ accepts a `path` argument when an agent needs to operate on a different repo.
 - `kforge_context`: read or write the agent context pack
 - `kforge_dashboard`: read or write an Obsidian-friendly repo dashboard with
   health, work queue, agent state, and index links
+- `kforge_obsidian`: read or write an Obsidian vault entry note linking the
+  dashboard, workflow, indexes, reviews, outputs, tasks, and runs
 - `kforge_handoff`: read or write an agent handoff packet
 - `kforge_workflow`: read or write the agent workflow runbook
 - `kforge_agent_templates`: list installable agent instruction templates
@@ -144,6 +147,7 @@ The MCP server follows the same rules as the CLI:
 - review apply only writes accepted, single-target wiki or claim reviews with structured
   Proposed Content
 - durable assertions should go into `claims/`
-- generated context, workflow, score, compile, answer, and task packs are Markdown artifacts
+- generated context, Obsidian entry, workflow, score, compile, answer, and task
+  packs are Markdown artifacts
 - agent instruction templates are plain Markdown files installed into the repo
 - agents should run `kforge_refresh` after meaningful changes

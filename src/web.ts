@@ -5,6 +5,7 @@ import {
   agentBoard,
   agentLaunch,
   agentReconcile,
+  askRepo,
   bootstrapRepo,
   dashboardRepo,
   doctorRepo,
@@ -158,6 +159,26 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
         query,
         scopes: searchScopes(body.scopes),
         limit: positiveNumber(body.limit),
+        json: true,
+      });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/ask") {
+      const body = await readJsonBody(request);
+      const question = optionalString(body.question);
+      if (!question) {
+        sendJson(response, 400, { ok: false, error: "ask question is required" });
+        return;
+      }
+      const result = askRepo(repoPath, {
+        question,
+        query: optionalString(body.query),
+        files: stringList(body.files),
+        scopes: searchScopes(body.scopes),
+        limit: positiveNumber(body.limit),
+        write: true,
         json: true,
       });
       sendJson(response, result.ok ? 200 : 400, commandResponse(result));
@@ -944,6 +965,18 @@ function webDashboardHtml(): string {
             <div class="section-head"><h2>Outputs</h2><span class="subtle" id="outputSummary"></span></div>
             <div class="section-body" id="outputTable"></div>
           </section>
+          <section id="ask">
+            <div class="section-head"><h2>Ask</h2><span class="subtle" id="askSummary"></span></div>
+            <div class="section-body">
+              <form id="askForm">
+                <label>Question <textarea name="question" placeholder="How should this evidence become durable knowledge?"></textarea></label>
+                <label>Search Query <input name="query" placeholder="defaults to the question"></label>
+                <label>Files <input name="files" placeholder="wiki/Provenance.md, raw/source.md"></label>
+                <button class="button primary" type="submit">Write Answer Pack</button>
+              </form>
+              <div class="preview-output" id="askResult"></div>
+            </div>
+          </section>
           <section id="agents">
             <div class="section-head"><h2>Agents</h2><span class="subtle" id="agentSummary"></span></div>
             <div class="section-body" id="agentTable"></div>
@@ -1442,6 +1475,33 @@ function webDashboardHtml(): string {
         });
         renderSearchResults(result.payload || {});
         toast("Search returned " + (result.payload?.total ?? 0) + " match(es)");
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
+    });
+    $("askForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      setBusy(true);
+      try {
+        const result = await api("/api/ask", {
+          method: "POST",
+          body: JSON.stringify({
+            question: String(form.get("question") || ""),
+            query: String(form.get("query") || ""),
+            files: list(form.get("files")),
+          }),
+        });
+        const payload = result.payload || {};
+        await load();
+        $("askSummary").textContent = payload.output || "";
+        $("askResult").innerHTML = '<div class="viewer-meta"><span class="status ok">created</span><code>' + h(payload.output || "") + '</code></div>';
+        if (payload.output) {
+          await openFile(payload.output);
+        }
+        toast("Answer pack written: " + (payload.output || "outputs/"));
       } catch (error) {
         toast(error.message || String(error));
       } finally {

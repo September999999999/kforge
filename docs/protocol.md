@@ -807,12 +807,15 @@ By default the pack is printed to stdout. With `--write`, it is saved under
 question. It does not call a model. It gathers repo context, deterministic
 search results, optional inspected files, and a draft-answer slot into one
 artifact that can be saved under `outputs/`.
+The Web dashboard exposes the same operation as an Ask form that writes the
+answer pack directly into `outputs/`, ready for inspection and promotion.
 
 Examples:
 
 ```bash
 kforge ask . --question "How does provenance affect trust?"
 kforge ask . --question "What should become a claim?" --query "claim provenance" --file wiki/Provenance.md --write
+kforge ask . --question "What should become a claim?" --write --json
 ```
 
 Saved answer packs can be promoted later with `kforge promote`.

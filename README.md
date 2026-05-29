@@ -483,9 +483,9 @@ navigation, review queue, task queue, runs, active agents, safe review file
 previews, and low-risk workflow actions such as saving Proposed Content,
 accepting or rejecting reviews, previewing review apply as a dry run, explicitly
 applying accepted reviews, previewing or applying recoverable agent reconcile,
-local search with open-in-preview results, refresh, bootstrap, and writing an
-agent launcher. Generated outputs can also be inspected and promoted into review
-artifacts from the dashboard.
+local search with open-in-preview results, writing answer packs into outputs,
+refresh, bootstrap, and writing an agent launcher. Generated outputs can also be
+inspected and promoted into review artifacts from the dashboard.
 
 Search the repo:
 
@@ -636,7 +636,7 @@ kforge compile review [path] [--limit <n>] [--dry-run] [--json]
                          create compile review artifacts from queued raw sources
 kforge compile draft [path] [--review <reviews/file.md>|--source <path> --target <wiki/page.md>] [--write] [--json]
                          create a wiki draft template for a compile review
-kforge ask [path] --question <text> [--query <text>] [--file <repo-path>] [--write]
+kforge ask [path] --question <text> [--query <text>] [--file <repo-path>] [--write] [--json]
                          create an answer pack for a question
 kforge search [path] --query <text> [--scope <scope>] [--limit <n>] [--json]
                          search local text files

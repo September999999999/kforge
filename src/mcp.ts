@@ -661,9 +661,10 @@ export function createKforgeMcpServer(options: McpOptions = {}): McpServer {
         scopes: z.array(scopeSchema).optional(),
         limit: z.number().int().positive().optional(),
         write: z.boolean().optional(),
+        json: z.boolean().optional(),
       }),
     },
-    async ({ path: repoPath, question, query, files, scopes, limit, write }) =>
+    async ({ path: repoPath, question, query, files, scopes, limit, write, json }) =>
       runAsTool(() =>
         askRepo(toolRepoPath(defaultRepoPath, repoPath), {
           question,
@@ -672,6 +673,7 @@ export function createKforgeMcpServer(options: McpOptions = {}): McpServer {
           scopes: scopes as SearchScope[] | undefined,
           limit,
           write,
+          json,
         }),
       ),
   );

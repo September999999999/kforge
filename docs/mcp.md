@@ -87,7 +87,8 @@ accepts a `path` argument when an agent needs to operate on a different repo.
   raw sources; set `json` for the same structured staging payload as CLI stdout
 - `kforge_compile_draft`: create or write a wiki draft template for a compile
   review; set `json` for structured `content`/`output` and next commands
-- `kforge_ask`: create a question-focused answer pack
+- `kforge_ask`: create a question-focused answer pack; set `json` for the
+  output ref/content and next commands
 - `kforge_pack`: create a broader agent task pack
 - `kforge_output_list`: list generated outputs; set `json` for structured
   output counts, titles, sizes, and review refs

@@ -472,6 +472,7 @@ function runAskCommand(args: string[]): CommandResult {
   const files = manyOptions(parsed.options, "file");
   const scopes = parseScopes(manyOptions(parsed.options, "scope"));
   const write = flagOption(parsed.options, "write");
+  const json = flagOption(parsed.options, "json");
 
   if (!question) {
     throw new Error("Missing required option: --question");
@@ -479,7 +480,7 @@ function runAskCommand(args: string[]): CommandResult {
 
   const limit = limitValue ? parsePositiveInteger(limitValue, "--limit") : undefined;
 
-  return askRepo(repoPath, { question, query, files, limit, scopes, write });
+  return askRepo(repoPath, { question, query, files, limit, scopes, write, json });
 }
 
 function runPromoteCommand(args: string[]): CommandResult {
@@ -1146,7 +1147,7 @@ Usage:
                                                        create compile review artifacts from queued raw sources
   kforge compile draft [path] [--review <reviews/file.md>|--source <path> --target <wiki/page.md>] [--write] [--json]
                                                        create a wiki draft template for a compile review
-  kforge ask [path] --question <text> [--query <text>] [--file <repo-path>] [--write]
+  kforge ask [path] --question <text> [--query <text>] [--file <repo-path>] [--write] [--json]
                                                        create an answer pack for a question
   kforge search [path] --query <text> [--scope <scope>] [--limit <n>] [--json]
                                                        search text files in the repo

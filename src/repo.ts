@@ -870,6 +870,19 @@ export interface AskOptions {
   limit?: number;
   scopes?: SearchScope[];
   write?: boolean;
+  json?: boolean;
+}
+
+export interface AskPayload {
+  ok: true;
+  updatedAt: string;
+  question: string;
+  query: string;
+  files: string[];
+  written: boolean;
+  output?: string;
+  content?: string;
+  next: string[];
 }
 
 export interface CreateClaimOptions {
@@ -1845,10 +1858,20 @@ export function askRepo(repoPath: string, options: AskOptions): CommandResult {
   }
 
   const content = contentOrError.messages[0];
+  const query = options.query?.trim() || question;
+  const files = (options.files ?? []).map(normalizeRepoRef).filter(Boolean);
   if (options.write) {
     const target = nextAvailableOutputPath(repoPath, `${slugify(question) || "question"}-answer-pack`);
     writeFileSyncish(target, content);
-    return { ok: true, messages: [`Created ${toRepoPath(repoPath, target)}`] };
+    const output = toRepoPath(repoPath, target);
+    if (options.json) {
+      return { ok: true, messages: [JSON.stringify(askPayload(question, query, files, content, output), null, 2)] };
+    }
+    return { ok: true, messages: [`Created ${output}`] };
+  }
+
+  if (options.json) {
+    return { ok: true, messages: [JSON.stringify(askPayload(question, query, files, content), null, 2)] };
   }
 
   return { ok: true, messages: [content] };
@@ -5409,6 +5432,24 @@ function answerPack(repoPath: string, options: AskOptions): CommandResult {
   );
 
   return { ok: true, messages: [lines.join("\n")] };
+}
+
+function askPayload(question: string, query: string, files: string[], content: string, output?: string): AskPayload {
+  return {
+    ok: true,
+    updatedAt: today(),
+    question,
+    query,
+    files,
+    written: Boolean(output),
+    ...(output ? { output } : { content }),
+    next: output
+      ? [
+          `kforge output inspect . --file ${shellQuote(output)} --json`,
+          `kforge promote . --file ${shellQuote(output)} --target wiki/<Page>.md --json`,
+        ]
+      : ["kforge ask . --question <question> --write --json"],
+  };
 }
 
 function compileBrief(repoPath: string, options: CompileOptions): CommandResult {

@@ -70,6 +70,7 @@ Goal: make answers accumulate instead of disappearing.
 - structured file inspection command
 - agent task pack generation
 - `kforge ask` answer pack
+- Web dashboard Ask form that writes answer packs into `outputs/`
 - output listing and inspection commands, including JSON output for automation
 - output filing templates
 - `kforge promote` review flow from `outputs/` toward `wiki/` and `claims/`,

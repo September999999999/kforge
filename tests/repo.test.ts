@@ -76,6 +76,7 @@ import {
   type AgentReconcilePayload,
   type AgentStatusPayload,
   type AgentStepPayload,
+  type AskPayload,
   type BootstrapPayload,
   type SourceAddPayload,
   type CompileDraftPayload,
@@ -406,6 +407,14 @@ test("web dashboard serves repo state and safe actions", async () => {
           sources: ["raw/source.md"],
         }),
       })) as { ok?: boolean; payload?: PromoteOutputPayload };
+      const ask = (await fetchJson(`${handle.url}/api/ask`, {
+        method: "POST",
+        body: JSON.stringify({
+          question: "What did the web dashboard produce?",
+          query: "web dashboard output",
+          files: ["outputs/web-answer.md"],
+        }),
+      })) as { ok?: boolean; payload?: AskPayload };
       const contentUpdate = (await fetchJson(`${handle.url}/api/review-content`, {
         method: "POST",
         body: JSON.stringify({
@@ -533,6 +542,11 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(promote.payload?.output, "outputs/web-answer.md");
       assert.equal(promote.payload?.target, "wiki/Web Answer.md");
       assert.match(promote.payload?.review ?? "", /^reviews\/.+promote-web-answer\.md$/);
+      assert.equal(ask.ok, true);
+      assert.equal(ask.payload?.question, "What did the web dashboard produce?");
+      assert.equal(ask.payload?.written, true);
+      assert.match(ask.payload?.output ?? "", /^outputs\/.+what-did-the-web-dashboard-produce-answer-pack\.md$/);
+      assert.match(await readFile(path.join(repoPath, ask.payload?.output ?? ""), "utf8"), /# Answer Pack/);
       assert.equal(contentUpdate.ok, true);
       assert.equal(contentUpdate.payload?.review, reviewFile);
       assert.equal(contentUpdate.payload?.source, "inline content");
@@ -2564,9 +2578,21 @@ test("ask writes answer packs to outputs", async () => {
       question: "What should I read first?",
       write: true,
     });
+    const json = JSON.parse(
+      askRepo(repoPath, {
+        question: "What should I read first?",
+        write: true,
+        json: true,
+      }).messages[0],
+    ) as AskPayload;
 
     assert.equal(result.ok, true);
     assert.match(result.messages[0], /outputs\/.*what-should-i-read-first-answer-pack.md/);
+    assert.equal(json.ok, true);
+    assert.equal(json.question, "What should I read first?");
+    assert.equal(json.written, true);
+    assert.match(json.output ?? "", /^outputs\/.+what-should-i-read-first-answer-pack-2\.md$/);
+    assert.match(json.next.join("\n"), /kforge output inspect/);
     assert.match(
       await readFile(path.join(repoPath, "outputs", `${today()}-what-should-i-read-first-answer-pack.md`), "utf8"),
       /# Answer Pack/,

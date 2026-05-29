@@ -90,6 +90,7 @@ export {
   type AgentTemplateInstallOptions,
   type AgentTemplateKind,
   type AskOptions,
+  type AskPayload,
   type BootstrapOptions,
   type BootstrapPayload,
   type ClaimAuditOptions,

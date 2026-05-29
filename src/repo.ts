@@ -317,12 +317,15 @@ export interface BootstrapPayload {
 export interface ScoreOptions {
   write?: boolean;
   json?: boolean;
+  minScore?: number;
 }
 
 export interface ScorePayload {
-  ok: true;
+  ok: boolean;
   updatedAt: string;
   trustScore?: number;
+  minScore?: number;
+  passed?: boolean;
   counts: {
     rawSources: number;
     wikiPages: number;
@@ -1698,9 +1701,9 @@ export function handoffRepo(repoPath: string, options: HandoffOptions = {}): Com
 export function scoreRepo(repoPath: string, options: ScoreOptions = {}): CommandResult {
   requireRepo(repoPath);
 
-  const payload = scorePayload(repoPath);
+  const payload = scorePayload(repoPath, options);
   if (options.json) {
-    return { ok: true, messages: [JSON.stringify(payload, null, 2)] };
+    return { ok: payload.ok, messages: [JSON.stringify(payload, null, 2)] };
   }
 
   const content = scoreReportFromPayload(payload);
@@ -1708,10 +1711,16 @@ export function scoreRepo(repoPath: string, options: ScoreOptions = {}): Command
     const target = path.join(repoPath, "indexes", "score.md");
     mkdirSyncish(path.dirname(target));
     writeFileSyncish(target, content);
-    return { ok: true, messages: [`Updated ${toRepoPath(repoPath, target)}`] };
+    return {
+      ok: payload.ok,
+      messages: [
+        `Updated ${toRepoPath(repoPath, target)}`,
+        ...(payload.ok ? [] : [`Trust score ${payload.trustScore ?? "n/a"} is below minimum ${payload.minScore}.`]),
+      ],
+    };
   }
 
-  return { ok: true, messages: [content] };
+  return { ok: payload.ok, messages: [content] };
 }
 
 export function compileRepo(repoPath: string, options: CompileOptions): CommandResult {
@@ -5288,7 +5297,7 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
-function scorePayload(repoPath: string): ScorePayload {
+function scorePayload(repoPath: string, options: ScoreOptions = {}): ScorePayload {
   const rawFiles = rawSourceFiles(repoPath);
   const wikiFiles = iterFiles(path.join(repoPath, "wiki"));
   const claimFiles = iterFiles(path.join(repoPath, "claims"));
@@ -5296,10 +5305,12 @@ function scorePayload(repoPath: string): ScorePayload {
   const outputFiles = iterFiles(path.join(repoPath, "outputs"));
   const doctor = doctorRepo(repoPath);
   const { metrics, openReviews, trustScore } = trustScoreData(repoPath);
+  const passed = options.minScore === undefined ? undefined : trustScore !== undefined && trustScore >= options.minScore;
   return {
-    ok: true,
+    ok: passed ?? true,
     updatedAt: today(),
     ...(trustScore === undefined ? {} : { trustScore }),
+    ...(options.minScore === undefined ? {} : { minScore: options.minScore, passed }),
     counts: {
       rawSources: rawFiles.length,
       wikiPages: wikiFiles.length,

@@ -899,10 +899,12 @@ test("mcp server exposes kforge tools over stdio", async () => {
       name: "kforge_score",
       arguments: {
         json: true,
+        minScore: 60,
       },
     });
-    const scorePayload = JSON.parse(firstText(score.content)) as { trustScore?: number; metrics?: Array<{ label?: string }> };
+    const scorePayload = JSON.parse(firstText(score.content)) as { trustScore?: number; passed?: boolean; metrics?: Array<{ label?: string }> };
     assert.equal(typeof scorePayload.trustScore, "number");
+    assert.equal(scorePayload.passed, true);
     assert.equal(scorePayload.metrics?.some((item) => item.label === "doctor health"), true);
 
     const status = await client.callTool({

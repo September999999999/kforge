@@ -603,7 +603,7 @@ kforge index [path]     generate source, wiki, claim, and review indexes
 kforge refresh [path]   refresh indexes and derived reports
 kforge doctor [path] [--write] [--json]
                          run structural health checks
-kforge score [path] [--write] [--json]
+kforge score [path] [--write] [--json] [--min-score <n>]
                          print or write a trust score report
 kforge context [path] [--write]
                          print or write an agent context pack

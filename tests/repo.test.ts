@@ -2856,7 +2856,11 @@ test("score reports trust metrics for an example repo", async () => {
 
     const result = scoreRepo(repoPath);
     const jsonResult = scoreRepo(repoPath, { json: true });
+    const passingGate = scoreRepo(repoPath, { json: true, minScore: 80 });
+    const failingGate = scoreRepo(repoPath, { json: true, minScore: 90 });
     const payload = JSON.parse(jsonResult.messages[0]) as ScorePayload;
+    const passingPayload = JSON.parse(passingGate.messages[0]) as ScorePayload;
+    const failingPayload = JSON.parse(failingGate.messages[0]) as ScorePayload;
 
     assert.equal(result.ok, true);
     assert.match(result.messages[0], /# Trust Score/);
@@ -2872,6 +2876,12 @@ test("score reports trust metrics for an example repo", async () => {
     assert.equal(payload.counts.openReviews, 1);
     assert.equal(payload.metrics.some((item) => item.label === "review debt clearance" && item.value === 0), true);
     assert.equal(payload.doctor.ok, true);
+    assert.equal(passingGate.ok, true);
+    assert.equal(passingPayload.passed, true);
+    assert.equal(passingPayload.minScore, 80);
+    assert.equal(failingGate.ok, false);
+    assert.equal(failingPayload.passed, false);
+    assert.equal(failingPayload.minScore, 90);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }

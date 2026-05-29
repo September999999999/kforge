@@ -656,11 +656,14 @@ Examples:
 kforge score .
 kforge score . --write
 kforge score . --json
+kforge score . --json --min-score 80
 ```
 
 With `--write`, the report is saved to `indexes/score.md`. With `--json`, stdout
 becomes a machine-readable Trust CI payload with counts, metrics, doctor status,
-and next commands.
+and next commands. With `--min-score <n>`, the command returns a failing exit
+status when the deterministic trust score is below the requested 0-100
+threshold.
 
 ## Compile Briefs
 

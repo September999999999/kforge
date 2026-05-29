@@ -215,7 +215,14 @@ function runRepoCommand(
   }
 
   if (command === "score") {
-    return scoreRepo(repoPath, { write, json });
+    const parsed = parseArgs(args);
+    const scoreRepoPath = resolveRepoPath(parsed.positionals[0] ?? ".");
+    const minScoreValue = oneOption(parsed.options, "min-score", false);
+    return scoreRepo(scoreRepoPath, {
+      write: flagOption(parsed.options, "write"),
+      json: flagOption(parsed.options, "json"),
+      minScore: minScoreValue ? parsePercentageInteger(minScoreValue, "--min-score") : undefined,
+    });
   }
 
   if (command === "context") {
@@ -1119,7 +1126,8 @@ Usage:
   kforge index [path]                                  generate inventory files
   kforge refresh [path]                                refresh indexes and derived reports
   kforge doctor [path] [--write] [--json]              run health checks
-  kforge score [path] [--write] [--json]               print or write a trust score report
+  kforge score [path] [--write] [--json] [--min-score <n>]
+                                                       print or write a trust score report
   kforge context [path] [--write]                      print or write an agent context pack
   kforge dashboard [path] [--write] [--json]           print or write an Obsidian-friendly status dashboard
   kforge obsidian [path] [--write] [--bridge] [--json] print/write an Obsidian entry or command bridge
@@ -1298,6 +1306,14 @@ function parsePositiveInteger(value: string, optionName: string): number {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isInteger(parsed) || parsed < 1) {
     throw new Error(`${optionName} must be a positive integer`);
+  }
+  return parsed;
+}
+
+function parsePercentageInteger(value: string, optionName: string): number {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 100 || String(parsed) !== value.trim()) {
+    throw new Error(`${optionName} must be an integer from 0 to 100`);
   }
   return parsed;
 }

@@ -138,7 +138,8 @@ accepts a `path` argument when an agent needs to operate on a different repo.
   claim target; set `json` for dry-run content or applied target output
 - `kforge_doctor`: run structural health checks and optionally write `indexes/doctor.md`
 - `kforge_score`: read or write the trust score report; set `json` for
-  machine-readable counts, metrics, doctor status, and next commands
+  machine-readable counts, metrics, doctor status, and next commands; set
+  `minScore` to use it as a Trust CI gate
 
 ## Safety Model
 

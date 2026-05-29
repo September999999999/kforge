@@ -84,6 +84,8 @@ test("cli can run the documented demo workflow", async () => {
     const claimReviewDrift = await runCli(["claim", "review-drift", repoPath, "--dry-run"]);
     const claimReviewDriftJson = await runCli(["claim", "review-drift", repoPath, "--dry-run", "--json"]);
     const scoreJson = await runCli(["score", repoPath, "--json"]);
+    const scoreGatePass = await runCli(["score", repoPath, "--json", "--min-score", "80"]);
+    const scoreGateFail = await runCli(["score", repoPath, "--json", "--min-score", "90"]);
     const doctor = await runCli(["doctor", repoPath, "--write"]);
 
     assert.equal(init.exitCode, 0);
@@ -130,6 +132,10 @@ test("cli can run the documented demo workflow", async () => {
     assert.equal(JSON.parse(claimReviewDriftJson.stdout).dryRun, true);
     assert.equal(scoreJson.exitCode, 0);
     assert.equal(JSON.parse(scoreJson.stdout).trustScore, 83);
+    assert.equal(scoreGatePass.exitCode, 0);
+    assert.equal(JSON.parse(scoreGatePass.stdout).passed, true);
+    assert.equal(scoreGateFail.exitCode, 1);
+    assert.equal(JSON.parse(scoreGateFail.stdout).passed, false);
     assert.equal(doctor.exitCode, 0);
     assert.match(doctor.stdout, /indexes\/doctor.md/);
     assert.match(await readFile(path.join(repoPath, "indexes", "doctor.md"), "utf8"), /Status: clean/);

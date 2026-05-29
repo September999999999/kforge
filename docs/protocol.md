@@ -247,13 +247,14 @@ Obsidian-friendly `indexes/dashboard.md` entry point with health, work queue,
 agent board, and index links.
 
 `kforge web` runs a local browser dashboard over the same deterministic repo
-operations. It binds to `127.0.0.1` by default and serves a status view for
-health, reviews, tasks, runs, and agents. It can preview repo files through the
-same inspect path checks as the CLI. Its write actions intentionally stay narrow:
-save structured Proposed Content, accept or reject review artifacts, preview
-review apply as a dry run, explicitly apply accepted review content, refresh
-derived indexes, bootstrap review-first work, and write an agent launcher script.
-The apply path uses the same accepted-review checks as `kforge review apply`.
+operations. It binds to `127.0.0.1` by default and serves a status view plus a
+file navigator for canonical repo directories. It can preview repo files through
+the same inspect path checks as the CLI. Its write actions intentionally stay
+narrow: save structured Proposed Content, accept or reject review artifacts,
+preview review apply as a dry run, explicitly apply accepted review content,
+refresh derived indexes, bootstrap review-first work, and write an agent launcher
+script. The apply path uses the same accepted-review checks as `kforge review
+apply`.
 
 `kforge bootstrap` is the deterministic startup pipeline for a newly ingested
 research repo. It runs the review-first setup steps in order: stage queued raw

@@ -19,6 +19,40 @@ import {
   type ReviewStatus,
 } from "./repo.js";
 
+const WEB_FILE_SCOPES = ["raw", "wiki", "claims", "indexes", "outputs", "reviews", "tasks", "runs"] as const;
+const WEB_TEXT_EXTENSIONS = new Set([
+  ".bib",
+  ".c",
+  ".cpp",
+  ".css",
+  ".csv",
+  ".go",
+  ".h",
+  ".htm",
+  ".html",
+  ".java",
+  ".js",
+  ".json",
+  ".jsonl",
+  ".jsx",
+  ".md",
+  ".markdown",
+  ".py",
+  ".rs",
+  ".scss",
+  ".sql",
+  ".svg",
+  ".tex",
+  ".toml",
+  ".ts",
+  ".tsx",
+  ".tsv",
+  ".txt",
+  ".xml",
+  ".yaml",
+  ".yml",
+]);
+
 export interface WebDashboardOptions {
   host?: string;
   port?: number;
@@ -72,6 +106,11 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
 
     if (request.method === "GET" && url.pathname === "/api/state") {
       sendJson(response, 200, webDashboardState(repoPath));
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/files") {
+      sendJson(response, 200, webFilesPayload(repoPath));
       return;
     }
 
@@ -183,6 +222,70 @@ function webDashboardState(repoPath: string): Record<string, unknown> {
     runs: parseJsonResult(listRuns(repoPath, { status: "all", json: true })),
     agents: parseJsonResult(agentBoard(repoPath, { json: true })),
   };
+}
+
+function webFilesPayload(repoPath: string): Record<string, unknown> {
+  const items = WEB_FILE_SCOPES.flatMap((scope) => webFilesForScope(repoPath, scope));
+  return {
+    ok: true,
+    updatedAt: new Date().toISOString(),
+    total: items.length,
+    scopes: WEB_FILE_SCOPES.map((scope) => ({
+      scope,
+      count: items.filter((item) => item.scope === scope).length,
+    })),
+    items,
+  };
+}
+
+function webFilesForScope(repoPath: string, scope: (typeof WEB_FILE_SCOPES)[number]): Record<string, unknown>[] {
+  const root = path.join(repoPath, scope);
+  return webIterFiles(root)
+    .filter(webIsTextFile)
+    .map((file) => {
+      const rel = toWebRepoPath(repoPath, file);
+      const stats = fs.statSync(file);
+      return {
+        file: rel,
+        scope,
+        name: path.basename(file),
+        size: stats.size,
+        updatedAt: stats.mtime.toISOString(),
+      };
+    });
+}
+
+function webIterFiles(root: string): string[] {
+  if (!fs.existsSync(root)) {
+    return [];
+  }
+
+  const found: string[] = [];
+  const entries = fs.readdirSync(root, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name.startsWith(".") || entry.name === "_meta") {
+      continue;
+    }
+
+    const fullPath = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...webIterFiles(fullPath));
+      continue;
+    }
+
+    if (entry.isFile() && entry.name !== ".gitkeep") {
+      found.push(fullPath);
+    }
+  }
+  return found.sort((left, right) => toWebRepoPath(root, left).localeCompare(toWebRepoPath(root, right)));
+}
+
+function webIsTextFile(file: string): boolean {
+  return WEB_TEXT_EXTENSIONS.has(path.extname(file).toLowerCase());
+}
+
+function toWebRepoPath(repoPath: string, file: string): string {
+  return path.relative(repoPath, file).split(path.sep).join("/");
 }
 
 function webFilePayload(repoPath: string, file: string): Record<string, unknown> {
@@ -617,6 +720,33 @@ function webDashboardHtml(): string {
       flex-wrap: wrap;
       margin-bottom: 10px;
     }
+    .file-list {
+      display: grid;
+      gap: 8px;
+      max-height: 360px;
+      overflow: auto;
+    }
+    .file-row {
+      width: 100%;
+      text-align: left;
+      display: grid;
+      gap: 3px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--text);
+      padding: 8px;
+      cursor: pointer;
+    }
+    .file-row:hover { background: #fbfcfa; }
+    .file-row strong {
+      font-size: 12px;
+      word-break: break-word;
+    }
+    .file-row span {
+      color: var(--muted);
+      font-size: 11px;
+    }
     .viewer-grid {
       display: grid;
       grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
@@ -662,6 +792,7 @@ function webDashboardHtml(): string {
       <div class="repo" id="repoPath">Loading repo</div>
       <nav>
         <a href="#overview">Overview</a>
+        <a href="#files">Files</a>
         <a href="#reviews">Reviews</a>
         <a href="#agents">Agents</a>
         <a href="#actions">Actions</a>
@@ -702,6 +833,10 @@ function webDashboardHtml(): string {
         </div>
 
         <div class="stack" id="actions">
+          <section id="files">
+            <div class="section-head"><h2>Files</h2><span class="subtle" id="fileSummary"></span></div>
+            <div class="section-body" id="fileList"><div class="empty">Loading files.</div></div>
+          </section>
           <section id="agents">
             <div class="section-head"><h2>Agents</h2><span class="subtle" id="agentSummary"></span></div>
             <div class="section-body" id="agentTable"></div>
@@ -755,8 +890,9 @@ function webDashboardHtml(): string {
     async function load() {
       setBusy(true);
       try {
-        const data = await api("/api/state");
+        const [data, files] = await Promise.all([api("/api/state"), api("/api/files")]);
         render(data);
+        renderFiles(files);
         toast("Ready");
       } catch (error) {
         toast(error.message || String(error));
@@ -787,6 +923,19 @@ function webDashboardHtml(): string {
       renderAgents(data.agents);
     }
 
+    function renderFiles(files) {
+      const items = files?.items || [];
+      $("fileSummary").textContent = (files?.total ?? 0) + " files";
+      if (!items.length) {
+        $("fileList").innerHTML = '<div class="empty">No files.</div>';
+        return;
+      }
+      $("fileList").innerHTML = '<div class="file-list">' +
+        items.map((item) => '<button class="file-row" type="button" data-open-file="' + h(item.file) + '"><strong>' + h(item.file) + '</strong><span>' + h(item.scope) + ' · ' + h(item.size || 0) + ' bytes</span></button>').join("") +
+        '</div>';
+      bindFileOpenButtons();
+    }
+
     function renderReviews(reviews) {
       const items = reviews?.items || [];
       if (!items.length) {
@@ -796,6 +945,10 @@ function webDashboardHtml(): string {
       $("reviewTable").innerHTML = '<table><thead><tr><th>Priority</th><th>Review</th><th>Status</th><th>Kind</th><th>Next</th><th></th></tr></thead><tbody>' +
         items.map((item) => '<tr><td>' + h(item.priority) + '</td><td><code>' + h(item.file) + '</code><br>' + h(item.title) + '</td><td>' + badge(item.status) + '</td><td>' + h(item.kind) + '</td><td>' + h(item.nextAction) + '</td><td><button class="button small" type="button" data-open-file="' + h(item.file) + '">Open</button></td></tr>').join("") +
         '</tbody></table>';
+      bindFileOpenButtons();
+    }
+
+    function bindFileOpenButtons() {
       for (const button of document.querySelectorAll("[data-open-file]")) {
         button.addEventListener("click", () => openFile(button.getAttribute("data-open-file") || ""));
       }

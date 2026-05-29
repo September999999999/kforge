@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -315,6 +315,9 @@ test("web dashboard serves repo state and safe actions", async () => {
   try {
     initRepo(repoPath);
     await writeFile(path.join(repoPath, "raw", "source.md"), "# Source\n", "utf8");
+    await mkdir(path.join(repoPath, "raw", "_meta"), { recursive: true });
+    await writeFile(path.join(repoPath, "raw", "_meta", "source.md"), "# Source Metadata\n", "utf8");
+    await writeFile(path.join(repoPath, "wiki", "Existing.md"), "# Existing\n", "utf8");
     createReview(repoPath, {
       title: "Web Review",
       targets: ["wiki/Web Review.md"],
@@ -332,6 +335,11 @@ test("web dashboard serves repo state and safe actions", async () => {
     const handle = await serveWebDashboard(repoPath, { port: 0 });
     try {
       const html = await fetchText(`${handle.url}/`);
+      const files = (await fetchJson(`${handle.url}/api/files`)) as {
+        ok?: boolean;
+        total?: number;
+        items?: { file?: string; scope?: string; size?: number }[];
+      };
       const state = (await fetchJson(`${handle.url}/api/state`)) as {
         ok?: boolean;
         dashboard?: { counts?: { rawSources?: number; reviews?: number } };
@@ -402,6 +410,12 @@ test("web dashboard serves repo state and safe actions", async () => {
 
       assert.match(html, /Knowledge Repo Dashboard/);
       assert.match(html, /File Preview/);
+      assert.match(html, /Files/);
+      assert.equal(files.ok, true);
+      assert.equal(files.items?.some((item) => item.file === "raw/source.md" && item.scope === "raw"), true);
+      assert.equal(files.items?.some((item) => item.file === "wiki/Existing.md" && item.scope === "wiki"), true);
+      assert.equal(files.items?.some((item) => item.file === reviewFile && item.scope === "reviews"), true);
+      assert.equal(files.items?.some((item) => item.file === "raw/_meta/source.md"), false);
       assert.equal(state.ok, true);
       assert.equal(state.dashboard?.counts?.rawSources, 1);
       assert.equal(state.dashboard?.counts?.reviews, 2);

@@ -496,9 +496,10 @@ accepted reviews, previewing or applying recoverable agent reconcile, single-URL
 pasted URL-list, and local-directory source ingest, local search with
 open-in-preview results, writing answer packs into outputs, drafting and
 attaching compile-review outputs, refresh, bootstrap, planning multi-agent runs,
-writing an agent launcher, and logging or finishing running agent runs with an
-option to mark linked tasks done on success. Generated outputs can also be
-inspected and promoted into review artifacts from the dashboard.
+writing an agent launcher, logging or finishing running agent runs with an option
+to mark linked tasks done on success, and releasing claimed tasks back to the
+queue. Generated outputs can also be inspected and promoted into review
+artifacts from the dashboard.
 
 Search the repo:
 

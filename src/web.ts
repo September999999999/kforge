@@ -21,6 +21,7 @@ import {
   listRuns,
   logRun,
   promoteOutput,
+  releaseTask,
   refreshRepo,
   applyReview,
   completeTask,
@@ -440,6 +441,18 @@ async function handleWebRequest(repoPath: string, request: IncomingMessage, resp
         return;
       }
       sendJson(response, 200, commandResponse(result));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/task-release") {
+      const body = await readJsonBody(request);
+      const task = optionalString(body.task);
+      if (!task) {
+        sendJson(response, 400, { ok: false, error: "task is required" });
+        return;
+      }
+      const result = releaseTask(repoPath, { task, note: optionalString(body.note), json: true });
+      sendJson(response, result.ok ? 200 : 400, commandResponse(result));
       return;
     }
 
@@ -1623,9 +1636,42 @@ function webDashboardHtml(): string {
         $("taskTable").innerHTML = '<div class="empty">No tasks.</div>';
         return;
       }
-      $("taskTable").innerHTML = '<table><thead><tr><th>Task</th><th>Status</th><th>Owner</th><th>Source</th></tr></thead><tbody>' +
-        items.map((item) => '<tr><td><code>' + h(item.file) + '</code><br>' + h(item.title) + '</td><td>' + badge(item.status) + '</td><td>' + h(item.owner || "-") + '</td><td><code>' + h(item.source) + '</code></td></tr>').join("") +
-        '</tbody></table>';
+      $("taskTable").innerHTML = '<table><thead><tr><th>Task</th><th>Status</th><th>Owner</th><th>Source</th><th></th></tr></thead><tbody>' +
+        items.map((item) => '<tr><td><code>' + h(item.file) + '</code><br>' + h(item.title) + '</td><td>' + badge(item.status) + '</td><td>' + h(item.owner || "-") + '</td><td><code>' + h(item.source) + '</code></td><td>' + (item.status === "claimed" ? '<button class="button small" type="button" data-task-release="' + h(item.file) + '">Release</button>' : '') + '</td></tr>').join("") +
+        '</tbody></table><div class="preview-output" id="taskActionResult"></div>';
+      bindTaskActionButtons();
+    }
+
+    function bindTaskActionButtons() {
+      for (const button of document.querySelectorAll("[data-task-release]")) {
+        button.addEventListener("click", () => releaseTaskFromDashboard(button.getAttribute("data-task-release") || ""));
+      }
+    }
+
+    function renderTaskActionResult(payload, label) {
+      const target = $("taskActionResult");
+      if (!target) return;
+      target.innerHTML = '<div class="viewer-meta"><span class="status ok">' + h(label) + '</span><code>' + h(payload?.task?.file || "") + '</code><span>' + h(payload?.task?.status || "") + '</span></div>';
+    }
+
+    async function releaseTaskFromDashboard(task) {
+      if (!task) return;
+      const note = prompt("Release note");
+      if (note === null) return;
+      setBusy(true);
+      try {
+        const result = await api("/api/task-release", {
+          method: "POST",
+          body: JSON.stringify({ task, note }),
+        });
+        await load();
+        renderTaskActionResult(result.payload || {}, "released");
+        toast("Released " + task);
+      } catch (error) {
+        toast(error.message || String(error));
+      } finally {
+        setBusy(false);
+      }
     }
 
     function renderRuns(runs) {

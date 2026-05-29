@@ -102,6 +102,7 @@ Goal: make the protocol usable from common AI and PKM environments.
 - Web dashboard launcher result links for worker tasks, runs, and logs
 - Web dashboard controls to log and finish running agent runs as success or
   failure, including linked task completion on success
+- Web dashboard task release controls for retrying failed or handed-off work
 - multi-agent board state with active runs, claimed tasks, and coordination gap
   detection
 - explicit multi-agent reconcile command for recoverable coordination drift

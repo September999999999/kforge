@@ -269,7 +269,7 @@ create compile-review draft outputs and attach them back to reviews, fetch URL
 sources, pasted URL lists, or local directories into `raw/`, refresh derived
 indexes, bootstrap review-first work, write an agent launcher script, and append
 or finish running agent runs as success or failure, optionally marking linked
-tasks done on success.
+tasks done on success or releasing claimed tasks back to the queue.
 It can also plan multi-agent runs from the same review queue before a launcher
 is generated. The apply path uses the same accepted-review checks as `kforge
 review apply`.

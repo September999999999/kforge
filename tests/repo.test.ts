@@ -677,6 +677,17 @@ test("web dashboard serves repo state and safe actions", async () => {
         runs?: { items?: Array<{ file?: string; status?: string }> };
         tasks?: { items?: Array<{ file?: string; status?: string }> };
       };
+      const releasedTask = (await fetchJson(`${handle.url}/api/task-release`, {
+        method: "POST",
+        body: JSON.stringify({
+          task: failedTaskFile,
+          note: "retry after failed run",
+        }),
+      })) as { ok?: boolean; payload?: TaskReleasePayload };
+      const stateAfterTaskRelease = (await fetchJson(`${handle.url}/api/state`)) as {
+        ok?: boolean;
+        tasks?: { items?: Array<{ file?: string; status?: string; owner?: string }> };
+      };
       const draftAttach = (await fetchJson(`${handle.url}/api/review-content`, {
         method: "POST",
         body: JSON.stringify({ file: secondaryReviewFile, from: draft.payload?.output }),
@@ -863,6 +874,11 @@ test("web dashboard serves repo state and safe actions", async () => {
       assert.equal(stateAfterFailedRunFinish.runs?.items?.find((item) => item.file === failedRunFile)?.status, "failure");
       assert.equal(stateAfterFailedRunFinish.tasks?.items?.find((item) => item.file === failedTaskFile)?.status, "claimed");
       assert.match(await readFile(path.join(repoPath, failedRunFile), "utf8"), /finished failure: web run failed/);
+      assert.equal(releasedTask.ok, true);
+      assert.equal(releasedTask.payload?.task.status, "open");
+      assert.equal(stateAfterTaskRelease.tasks?.items?.find((item) => item.file === failedTaskFile)?.status, "open");
+      assert.equal(stateAfterTaskRelease.tasks?.items?.find((item) => item.file === failedTaskFile)?.owner, undefined);
+      assert.match(await readFile(path.join(repoPath, failedTaskFile), "utf8"), /released: retry after failed run/);
       assert.match(plan.payload?.assignments[0]?.run.file ?? "", /^runs\/.+web-plan-a\.md$/);
       assert.match(plan.payload?.assignments[1]?.task.file ?? "", /^tasks\/.+\.md$/);
 

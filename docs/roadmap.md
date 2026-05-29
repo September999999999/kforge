@@ -103,7 +103,7 @@ Goal: make the protocol usable from common AI and PKM environments.
 - high-level agent draft loop with `agent next`, `agent step`, `agent draft`,
   review writeback, accepted apply, and finish smoke coverage
 - Obsidian vault entry note through `kforge obsidian`
-- Obsidian helper plugin or command palette bridge
+- Obsidian command palette bridge manifest through `kforge obsidian --bridge`
 - local search service through CLI, MCP, and Web dashboard
 - optional Rust search/index acceleration only if profiling shows it is needed
 

@@ -325,7 +325,17 @@ test("obsidian prints and writes a vault entry note", async () => {
 
     const printed = obsidianRepo(repoPath);
     const written = obsidianRepo(repoPath, { write: true });
+    const bridge = obsidianRepo(repoPath, { bridge: true });
+    const bridgeJson = JSON.parse(obsidianRepo(repoPath, { bridge: true, write: true, json: true }).messages[0]) as {
+      commandsFile: string;
+      manifestFile: string;
+      commands: Array<{ id: string; command: string }>;
+    };
     const content = await readFile(path.join(repoPath, "indexes", "obsidian.md"), "utf8");
+    const bridgeContent = await readFile(path.join(repoPath, ".obsidian", "kforge", "commands.md"), "utf8");
+    const bridgeManifest = JSON.parse(await readFile(path.join(repoPath, ".obsidian", "kforge", "commands.json"), "utf8")) as {
+      commands: Array<{ id: string; command: string }>;
+    };
 
     assert.equal(printed.ok, true);
     assert.match(printed.messages[0], /# kforge Obsidian Home/);
@@ -336,6 +346,13 @@ test("obsidian prints and writes a vault entry note", async () => {
     assert.match(content, /## Start Here/);
     assert.match(content, /\[Workflow runbook\]\(\.\.\/indexes\/workflow\.md\)/);
     assert.match(content, /\[Wiki home\]\(\.\.\/wiki\/Home\.md\)/);
+    assert.equal(bridge.ok, true);
+    assert.match(bridge.messages[0], /# kforge Obsidian Command Bridge/);
+    assert.equal(bridgeJson.commandsFile, ".obsidian/kforge/commands.md");
+    assert.equal(bridgeJson.manifestFile, ".obsidian/kforge/commands.json");
+    assert.equal(bridgeJson.commands.some((command) => command.id === "web" && command.command === "kforge web ."), true);
+    assert.match(bridgeContent, /Start local dashboard/);
+    assert.equal(bridgeManifest.commands.some((command) => command.id === "agent-plan"), true);
   } finally {
     await rm(repoPath, { recursive: true, force: true });
   }

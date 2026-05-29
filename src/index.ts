@@ -123,6 +123,8 @@ export {
   type OutputListOptions,
   type OutputListPayload,
   type ObsidianOptions,
+  type ObsidianBridgeCommand,
+  type ObsidianBridgePayload,
   type ObsidianPayload,
   type PackOptions,
   type PromoteOutputPayload,

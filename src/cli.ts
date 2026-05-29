@@ -177,7 +177,7 @@ function runRepoCommand(
   const write = args.includes("--write");
   const json = args.includes("--json");
   const positional = args.filter(
-    (arg) => arg !== "--force" && arg !== "--example" && arg !== "--write" && arg !== "--json",
+    (arg) => arg !== "--force" && arg !== "--example" && arg !== "--write" && arg !== "--json" && arg !== "--bridge",
   );
   const repoPath = resolveRepoPath(positional[0] ?? (command === "demo" ? "./kforge-demo" : "."));
 
@@ -227,7 +227,12 @@ function runRepoCommand(
   }
 
   if (command === "obsidian") {
-    return obsidianRepo(repoPath, { write });
+    const parsed = parseArgs(args);
+    return obsidianRepo(resolveRepoPath(parsed.positionals[0] ?? "."), {
+      write: flagOption(parsed.options, "write"),
+      bridge: flagOption(parsed.options, "bridge"),
+      json: flagOption(parsed.options, "json"),
+    });
   }
 
   if (command === "handoff") {
@@ -1116,7 +1121,7 @@ Usage:
   kforge score [path] [--write]                        print or write a trust score report
   kforge context [path] [--write]                      print or write an agent context pack
   kforge dashboard [path] [--write] [--json]           print or write an Obsidian-friendly status dashboard
-  kforge obsidian [path] [--write]                     print or write an Obsidian vault entry note
+  kforge obsidian [path] [--write] [--bridge] [--json] print/write an Obsidian entry or command bridge
   kforge handoff [path] [--write]                      print or write an agent handoff packet
   kforge workflow [path] [--write]                     print or write an agent workflow runbook
   kforge graph [path] [--write]                        print or write wiki backlinks and orphan report
@@ -1239,7 +1244,17 @@ function parseArgs(args: string[]): { positionals: string[]; options: Map<string
     }
 
     const value = args[index + 1];
-    if (name === "write" || name === "dry-run" || name === "json" || name === "force" || name === "no-seed" || name === "no-plan" || name === "exec" || name === "task-done") {
+    if (
+      name === "write" ||
+      name === "dry-run" ||
+      name === "json" ||
+      name === "force" ||
+      name === "bridge" ||
+      name === "no-seed" ||
+      name === "no-plan" ||
+      name === "exec" ||
+      name === "task-done"
+    ) {
       options.set(name, [...(options.get(name) ?? []), "true"]);
       continue;
     }

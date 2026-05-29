@@ -57,6 +57,8 @@ kforge context .
 `kforge obsidian . --write` writes `indexes/obsidian.md`, a vault home note
 that links the dashboard, workflow, generated indexes, reviews, outputs, tasks,
 and runs.
+`kforge obsidian . --bridge --write` writes `.obsidian/kforge/commands.md` and
+`.obsidian/kforge/commands.json` for command-palette or shell-command helpers.
 
 For a browser-based local control surface, run:
 

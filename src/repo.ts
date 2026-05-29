@@ -39,6 +39,8 @@ export interface DashboardOptions {
 
 export interface ObsidianOptions {
   write?: boolean;
+  bridge?: boolean;
+  json?: boolean;
 }
 
 export interface GraphOptions {
@@ -263,6 +265,7 @@ export interface ObsidianPayload {
   ok: true;
   updatedAt: string;
   vaultEntry: string;
+  bridge?: ObsidianBridgePayload;
   counts: DashboardPayload["counts"];
   health: DashboardPayload["health"];
   sections: Array<{
@@ -270,6 +273,23 @@ export interface ObsidianPayload {
     links: Array<{ label: string; file: string }>;
   }>;
   commands: string[];
+}
+
+export interface ObsidianBridgeCommand {
+  id: string;
+  label: string;
+  description: string;
+  command: string;
+}
+
+export interface ObsidianBridgePayload {
+  ok: true;
+  updatedAt: string;
+  directory: string;
+  commandsFile: string;
+  manifestFile: string;
+  commands: ObsidianBridgeCommand[];
+  next: string[];
 }
 
 export interface BootstrapPayload {
@@ -1241,6 +1261,20 @@ export function dashboardRepo(repoPath: string, options: DashboardOptions = {}):
 
 export function obsidianRepo(repoPath: string, options: ObsidianOptions = {}): CommandResult {
   requireRepo(repoPath);
+
+  if (options.bridge) {
+    const payload = obsidianBridgePayload(repoPath);
+    if (options.write) {
+      writeObsidianBridge(repoPath, payload);
+    }
+    if (options.json) {
+      return { ok: true, messages: [JSON.stringify(payload, null, 2)] };
+    }
+    if (options.write) {
+      return { ok: true, messages: [`Updated ${payload.commandsFile}`, `Updated ${payload.manifestFile}`] };
+    }
+    return { ok: true, messages: [obsidianBridgeMarkdown(payload)] };
+  }
 
   const content = obsidianEntry(repoPath);
   if (options.write) {
@@ -4302,6 +4336,7 @@ function obsidianPayload(repoPath: string): ObsidianPayload {
     ok: true,
     updatedAt: dashboard.updatedAt,
     vaultEntry: "indexes/obsidian.md",
+    bridge: obsidianBridgePayload(repoPath),
     counts: dashboard.counts,
     health: dashboard.health,
     sections,
@@ -4314,6 +4349,107 @@ function obsidianPayload(repoPath: string): ObsidianPayload {
       ...dashboard.next,
     ]),
   };
+}
+
+function obsidianBridgePayload(repoPath: string): ObsidianBridgePayload {
+  const updatedAt = today();
+  const commands: ObsidianBridgeCommand[] = [
+    {
+      id: "refresh",
+      label: "Refresh derived indexes",
+      description: "Rebuild source, wiki, claim, review, dashboard, and health reports.",
+      command: "kforge refresh .",
+    },
+    {
+      id: "web",
+      label: "Start local dashboard",
+      description: "Open the localhost workbench for ingest, search, ask, review, output filing, and multi-agent controls.",
+      command: "kforge web .",
+    },
+    {
+      id: "doctor",
+      label: "Run health checks",
+      description: "Check broken links, missing source refs, stale indexes, review refs, and review debt.",
+      command: "kforge doctor . --write",
+    },
+    {
+      id: "ask",
+      label: "Write answer pack",
+      description: "Create a reusable answer pack under outputs/ for the current research question.",
+      command: 'kforge ask . --question "<question>" --write --json',
+    },
+    {
+      id: "bootstrap",
+      label: "Stage source compile reviews",
+      description: "Turn queued raw sources into reviewable compile work, refresh indexes, and seed tasks.",
+      command: "kforge bootstrap . --json",
+    },
+    {
+      id: "agent-plan",
+      label: "Plan parallel agent runs",
+      description: "Assign the current review queue to multiple provider-neutral agent workers.",
+      command: "kforge agent plan . --agent <agent-a> --agent <agent-b> --json",
+    },
+    {
+      id: "review-queue",
+      label: "Inspect review queue",
+      description: "Show the next reviewable work item with suggested commands.",
+      command: "kforge review queue . --status actionable --json",
+    },
+  ];
+
+  return {
+    ok: true,
+    updatedAt,
+    directory: ".obsidian/kforge",
+    commandsFile: ".obsidian/kforge/commands.md",
+    manifestFile: ".obsidian/kforge/commands.json",
+    commands,
+    next: [
+      "kforge obsidian . --write",
+      "kforge obsidian . --bridge --write",
+      "kforge web .",
+    ],
+  };
+}
+
+function obsidianBridgeMarkdown(payload: ObsidianBridgePayload): string {
+  return [
+    GENERATED_HEADER,
+    "# kforge Obsidian Command Bridge",
+    "",
+    `Updated: ${payload.updatedAt}`,
+    "",
+    "This file is a lightweight command-palette bridge for Obsidian-adjacent workflows.",
+    "Use it directly, or let a shell-command/plugin layer read the adjacent JSON manifest.",
+    "",
+    "## Commands",
+    "",
+    "| Command | Purpose | Shell |",
+    "| --- | --- | --- |",
+    ...payload.commands.map(
+      (command) =>
+        `| ${escapeTableCell(command.label)} | ${escapeTableCell(command.description)} | \`${escapeTableCell(command.command)}\` |`,
+    ),
+    "",
+    "## Files",
+    "",
+    `- command note: \`${payload.commandsFile}\``,
+    `- JSON manifest: \`${payload.manifestFile}\``,
+    "",
+    "## Next",
+    "",
+    ...payload.next.map((command) => `- \`${command}\``),
+    "",
+  ].join("\n");
+}
+
+function writeObsidianBridge(repoPath: string, payload: ObsidianBridgePayload): void {
+  const commandsPath = path.join(repoPath, payload.commandsFile);
+  const manifestPath = path.join(repoPath, payload.manifestFile);
+  mkdirSyncish(path.dirname(commandsPath));
+  writeFileSyncish(commandsPath, obsidianBridgeMarkdown(payload));
+  writeFileSyncish(manifestPath, JSON.stringify(payload, null, 2) + "\n");
 }
 
 function dashboardNextCommands(input: {

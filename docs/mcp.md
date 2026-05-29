@@ -51,8 +51,9 @@ accepts a `path` argument when an agent needs to operate on a different repo.
 - `kforge_context`: read or write the agent context pack
 - `kforge_dashboard`: read or write an Obsidian-friendly repo dashboard with
   health, work queue, agent state, and index links
-- `kforge_obsidian`: read or write an Obsidian vault entry note linking the
-  dashboard, workflow, indexes, reviews, outputs, tasks, and runs
+- `kforge_obsidian`: read or write an Obsidian vault entry note, or set
+  `bridge` to create the command bridge note and JSON manifest under
+  `.obsidian/kforge/`
 - `kforge_handoff`: read or write an agent handoff packet
 - `kforge_workflow`: read or write the agent workflow runbook
 - `kforge_agent_templates`: list installable agent instruction templates

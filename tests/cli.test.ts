@@ -73,6 +73,7 @@ test("cli can run the documented demo workflow", async () => {
     const dashboardWriteJson = await runCli(["dashboard", repoPath, "--write", "--json"]);
     const obsidian = await runCli(["obsidian", repoPath]);
     const obsidianWrite = await runCli(["obsidian", repoPath, "--write"]);
+    const obsidianBridge = await runCli(["obsidian", repoPath, "--bridge", "--write", "--json"]);
     const handoff = await runCli(["handoff", repoPath]);
     const reviewQueue = await runCli(["review", "queue", repoPath]);
     const reviewQueueJson = await runCli(["review", "queue", repoPath, "--json"]);
@@ -105,6 +106,9 @@ test("cli can run the documented demo workflow", async () => {
     assert.equal(obsidianWrite.exitCode, 0);
     assert.match(obsidianWrite.stdout, /indexes\/obsidian.md/);
     assert.match(await readFile(path.join(repoPath, "indexes", "obsidian.md"), "utf8"), /\[Dashboard\]\(\.\.\/indexes\/dashboard\.md\)/);
+    assert.equal(obsidianBridge.exitCode, 0);
+    assert.equal(JSON.parse(obsidianBridge.stdout).commandsFile, ".obsidian/kforge/commands.md");
+    assert.match(await readFile(path.join(repoPath, ".obsidian", "kforge", "commands.md"), "utf8"), /Command Bridge/);
     assert.equal(handoff.exitCode, 0);
     assert.match(handoff.stdout, /# Agent Handoff/);
     assert.equal(reviewQueue.exitCode, 0);

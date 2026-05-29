@@ -370,10 +370,12 @@ export function createKforgeMcpServer(options: McpOptions = {}): McpServer {
       inputSchema: z.object({
         path: repoPathSchema,
         write: z.boolean().optional(),
+        bridge: z.boolean().optional(),
+        json: z.boolean().optional(),
       }),
     },
-    async ({ path: repoPath, write }) =>
-      runAsTool(() => obsidianRepo(toolRepoPath(defaultRepoPath, repoPath), { write })),
+    async ({ path: repoPath, write, bridge, json }) =>
+      runAsTool(() => obsidianRepo(toolRepoPath(defaultRepoPath, repoPath), { write, bridge, json })),
   );
 
   server.registerTool(

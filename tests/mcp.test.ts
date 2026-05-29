@@ -114,6 +114,16 @@ test("mcp server exposes kforge tools over stdio", async () => {
     });
     assert.match(firstText(obsidian.content), /indexes\/obsidian.md/);
     assert.match(await readFile(path.join(repoPath, "indexes", "obsidian.md"), "utf8"), /# kforge Obsidian Home/);
+    const obsidianBridge = await client.callTool({
+      name: "kforge_obsidian",
+      arguments: {
+        write: true,
+        bridge: true,
+        json: true,
+      },
+    });
+    assert.equal(JSON.parse(firstText(obsidianBridge.content)).manifestFile, ".obsidian/kforge/commands.json");
+    assert.match(await readFile(path.join(repoPath, ".obsidian", "kforge", "commands.md"), "utf8"), /kforge Obsidian Command Bridge/);
 
     const demo = await client.callTool({
       name: "kforge_demo",

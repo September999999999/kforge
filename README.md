@@ -470,7 +470,12 @@ Write an Obsidian vault home note:
 
 ```bash
 kforge obsidian ~/research/my-topic --write
+kforge obsidian ~/research/my-topic --bridge --write
 ```
+
+The bridge writes `.obsidian/kforge/commands.md` and
+`.obsidian/kforge/commands.json` so an Obsidian command palette helper, shell
+commands plugin, or local agent can discover the common `kforge` workflows.
 
 Open the local web dashboard:
 
@@ -596,8 +601,7 @@ kforge context [path] [--write]
                          print or write an agent context pack
 kforge dashboard [path] [--write] [--json]
                          print or write an Obsidian-friendly status dashboard
-kforge obsidian [path] [--write]
-                         print or write an Obsidian vault entry note
+kforge obsidian [path] [--write] [--bridge] [--json] print/write an Obsidian entry or command bridge
 kforge handoff [path] [--write]
                          print or write an agent handoff packet
 kforge workflow [path] [--write]
